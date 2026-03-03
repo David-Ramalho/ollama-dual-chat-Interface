@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Echo // Dual Mind</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,300&family=Syne:wght@400;700;800&display=swap');
+
+:root {
+  --bg:     #080810;
+  --bg2:    #0d0d1a;
+  --bg3:    #12121f;
+  --bg4:    #17172a;
+  --border: #1c1c35;
+  --a:      #7c6aff;
+  --b:      #ff6a9a;
+  --c:      #6affdd;
+  --u:      #ffd86a;
+  --txt:    #b8b8d8;
+  --dim:    #4a4a6a;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; background:var(--bg); color:var(--txt); font-family:'JetBrains Mono',monospace; overflow:hidden; }
+
+body::after {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 0%, rgba(124,106,255,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 30% at 80% 100%, rgba(255,106,154,0.05) 0%, transparent 60%);
+}
+
+#app { display:flex; flex-direction:column; height:100vh; position:relative; z-index:1; }
+
+header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 18px; border-bottom:1px solid var(--border);
+  background:var(--bg2); flex-shrink:0;
+}
+.logo {
+  font-family:'Syne',sans-serif; font-weight:800; font-size:15px; letter-spacing:3px;
+  background:linear-gradient(90deg,var(--a),var(--b)); -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.hdr-right { display:flex; align-items:center; gap:10px; }
+.pill { display:flex; align-items:center; gap:5px; font-size:9px; letter-spacing:1px; color:var(--dim); background:var(--bg3); border:1px solid var(--border); padding:3px 9px; border-radius:20px; }
+.dot { width:6px; height:6px; border-radius:50%; background:var(--c); box-shadow:0 0 5px var(--c); }
+.dot.off { background:var(--b); box-shadow:0 0 5px var(--b); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+#config {
+  background:var(--bg2); border-bottom:1px solid var(--border);
+  padding:10px 18px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; flex-shrink:0;
+}
+.cfg-group { display:flex; flex-direction:column; gap:4px; flex:1; min-width:160px; }
+.cfg-label { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--dim); display:flex; align-items:center; gap:5px; }
+.badge { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.badge-a { background:var(--a); box-shadow:0 0 4px var(--a); }
+.badge-b { background:var(--b); box-shadow:0 0 4px var(--b); }
+.badge-u { background:var(--u); box-shadow:0 0 4px var(--u); }
+.badge-rag { background:var(--c); box-shadow:0 0 4px var(--c); }
+
+select, input[type=text], input[type=number] {
+  background:var(--bg3); border:1px solid var(--border); color:var(--txt);
+  padding:6px 9px; font-family:'JetBrains Mono',monospace; font-size:11px;
+  border-radius:4px; outline:none; transition:border-color .2s; width:100%;
+}
+select:focus, input:focus { border-color:var(--a); }
+
+textarea {
+  background:var(--bg3); border:1px solid var(--border); color:var(--txt);
+  padding:7px 10px; font-family:'JetBrains Mono',monospace; font-size:11px;
+  border-radius:4px; outline:none; resize:none; transition:border-color .2s; width:100%;
+}
+textarea:focus { border-color:var(--a); }
+textarea::placeholder { color:var(--dim); }
+
+.cfg-actions { display:flex; flex-direction:column; gap:5px; }
+.btn-row { display:flex; gap:6px; }
+
+button {
+  font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:1.5px;
+  text-transform:uppercase; padding:6px 12px; border:1px solid var(--border);
+  border-radius:4px; cursor:pointer; transition:all .2s; background:var(--bg3); color:var(--txt); white-space:nowrap;
+}
+button:hover { border-color:var(--a); color:var(--a); }
+button:disabled { opacity:.35; cursor:not-allowed; }
+.btn-auto { background:var(--a); border-color:var(--a); color:#fff; }
+.btn-auto:hover { background:#9580ff; border-color:#9580ff; color:#fff; }
+.btn-stop { border-color:var(--b); color:var(--b); background:transparent; }
+.btn-stop:hover { background:rgba(255,106,154,.1); color:var(--b); }
+.btn-clear { border-color:var(--dim); color:var(--dim); }
+.btn-save { border-color:var(--c); color:var(--c); }
+.btn-save:hover { background:rgba(106,255,221,.08); color:var(--c); }
+.btn-rag { border-color:var(--c); color:var(--c); }
+.btn-rag:hover { background:rgba(106,255,221,.08); }
+.btn-rag.loaded { background:rgba(106,255,221,.06); }
+.btn-settings { border-color:var(--dim); color:var(--dim); }
+.btn-settings.open { border-color:var(--a); color:var(--a); }
+.btn-unload { border-color:var(--u); color:var(--u); }
+.btn-unload:hover { background:rgba(255,216,106,.08); color:var(--u); }
+.btn-unload-all { border-color:var(--b); color:var(--b); }
+.btn-unload-all:hover { background:rgba(255,106,154,.08); color:var(--b); }
+.btn-send { background:var(--a); border-color:var(--a); color:#fff; padding:9px 16px; }
+.btn-send:hover { background:#9580ff; border-color:#9580ff; color:#fff; }
+
+.exp-panel {
+  background:var(--bg2); border-bottom:1px solid var(--border);
+  max-height:0; overflow:hidden; transition:max-height .3s ease; flex-shrink:0;
+}
+.exp-panel.open { max-height:500px; }
+.panel-inner { padding:12px 18px; }
+
+.settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.settings-col { display:flex; flex-direction:column; gap:7px; }
+.settings-col-title { font-size:9px; letter-spacing:2px; text-transform:uppercase; padding-bottom:6px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:6px; }
+.param-row { display:flex; gap:8px; align-items:center; }
+.param-row label { font-size:9px; color:var(--dim); letter-spacing:1px; min-width:95px; }
+.param-row input { flex:1; max-width:80px; }
+.sys-ta { resize:vertical; min-height:58px; max-height:100px; font-size:10px; line-height:1.5; }
+
+.rag-inner { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.rag-status { font-size:10px; color:var(--c); letter-spacing:1px; white-space:nowrap; }
+.toggle-row { display:flex; align-items:center; gap:6px; font-size:9px; color:var(--dim); cursor:pointer; letter-spacing:1px; }
+.toggle-sw { width:28px; height:15px; background:var(--bg4); border:1px solid var(--border); border-radius:8px; position:relative; transition:background .2s; flex-shrink:0; }
+.toggle-sw::after { content:''; position:absolute; left:2px; top:2px; width:9px; height:9px; background:var(--dim); border-radius:50%; transition:all .2s; }
+.toggle-sw.on { background:rgba(106,255,221,.2); border-color:var(--c); }
+.toggle-sw.on::after { left:15px; background:var(--c); }
+
+#chat { flex:1; overflow-y:auto; padding:16px 18px; display:flex; flex-direction:column; gap:12px; }
+#chat::-webkit-scrollbar { width:3px; }
+#chat::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+#empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:var(--dim); font-size:10px; letter-spacing:1px; text-align:center; }
+.empty-glyph { font-size:36px; opacity:.2; margin-bottom:6px; }
+.empty-tag { display:inline-block; padding:3px 10px; border:1px solid rgba(106,255,221,.2); color:var(--c); border-radius:20px; font-size:9px; letter-spacing:2px; margin-top:4px; }
+
+.msg { display:flex; gap:9px; max-width:84%; animation:fadeUp .25s ease; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+.msg.ma { align-self:flex-start; }
+.msg.mb { align-self:flex-start; flex-direction:row-reverse; }
+.msg.mu { align-self:center; flex-direction:column; align-items:center; max-width:65%; }
+
+.avatar { width:28px; height:28px; border-radius:5px; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:700; flex-shrink:0; margin-top:2px; }
+.ma .avatar { background:rgba(124,106,255,.12); border:1px solid var(--a); color:var(--a); }
+.mb .avatar { background:rgba(255,106,154,.12); border:1px solid var(--b); color:var(--b); }
+.mu .avatar { background:rgba(255,216,106,.1); border:1px solid var(--u); color:var(--u); }
+
+.bubble { background:var(--bg3); border-radius:6px; padding:9px 13px; font-size:12px; line-height:1.65; }
+.ma .bubble { border:1px solid rgba(124,106,255,.2); border-left:2px solid var(--a); }
+.mb .bubble { border:1px solid rgba(255,106,154,.2); border-right:2px solid var(--b); }
+.mu .bubble { border:1px solid rgba(255,216,106,.2); text-align:center; background:rgba(255,216,106,.03); }
+
+.msg-from { font-size:8px; letter-spacing:2px; text-transform:uppercase; margin-bottom:4px; }
+.ma .msg-from { color:var(--a); }
+.mb .msg-from { color:var(--b); }
+.mu .msg-from { color:var(--u); }
+
+.think { background:rgba(255,255,255,.02); border:1px solid var(--border); border-radius:4px; padding:6px 9px; margin-bottom:7px; font-size:10px; color:var(--dim); font-style:italic; }
+.think-lbl { font-size:8px; letter-spacing:2px; color:var(--c); font-style:normal; margin-bottom:3px; }
+
+.typing { display:flex; gap:3px; align-items:center; padding:3px 0; }
+.td { width:4px; height:4px; border-radius:50%; background:var(--dim); animation:td 1.2s infinite; }
+.td:nth-child(2){animation-delay:.2s} .td:nth-child(3){animation-delay:.4s}
+@keyframes td { 0%,60%,100%{opacity:.3;transform:scale(.8)} 30%{opacity:1;transform:scale(1.3)} }
+
+.sys { align-self:center; font-size:9px; letter-spacing:1.5px; color:var(--dim); padding:3px 12px; background:rgba(255,255,255,.02); border-radius:20px; border:1px solid var(--border); }
+
+#input-bar { padding:10px 18px; border-top:1px solid var(--border); background:var(--bg2); display:flex; gap:9px; align-items:flex-end; flex-shrink:0; }
+#inp { flex:1; min-height:38px; max-height:100px; line-height:1.5; font-size:12px; padding:8px 11px; }
+.input-side { display:flex; flex-direction:column; gap:3px; align-items:flex-end; }
+</style>
+</head>
+<body>
+<div id="app">
+
+<header>
+  <div class="logo">ECHO // DUAL MIND</div>
+  <div class="hdr-right">
+    <div class="pill"><div class="dot" id="ollamaDot"></div><span id="ollamaStatus">CONNECTING...</span></div>
+    <div class="pill" id="ragPill" style="display:none"><div class="dot" style="background:var(--c);box-shadow:0 0 5px var(--c)"></div><span id="ragInfo">RAG</span></div>
+  </div>
+</header>
+
+<div id="config">
+  <div class="cfg-group">
+    <div class="cfg-label"><div class="badge badge-a"></div>Model A</div>
+    <select id="modelA"></select>
+  </div>
+  <div class="cfg-group">
+    <div class="cfg-label"><div class="badge badge-b"></div>Model B</div>
+    <select id="modelB"></select>
+  </div>
+  <div class="cfg-group" style="max-width:75px">
+    <div class="cfg-label">Turns</div>
+    <input type="number" id="turns" value="4" min="1" max="30">
+  </div>
+  <div class="cfg-actions">
+    <div class="btn-row">
+      <button class="btn-auto" id="btnAuto" onclick="startAuto()">▶ AUTO</button>
+      <button class="btn-stop" id="btnStop" onclick="stopAll()" style="display:none">■ STOP</button>
+      <button class="btn-clear" onclick="clearAll()">✕ CLEAR</button>
+      <button class="btn-save" onclick="saveChat()">↓ SAVE TXT</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn-settings" id="btnSettings" onclick="togglePanel('settings-panel','btnSettings')">⚙ SETTINGS / SYSTEM PROMPT</button>
+      <button class="btn-rag" id="btnRag" onclick="togglePanel('rag-panel','btnRag')">◈ RAG</button>
+      <button class="btn-unload" onclick="unloadModel('A')" title="Unload Model A from VRAM">⏏ A</button>
+      <button class="btn-unload" onclick="unloadModel('B')" title="Unload Model B from VRAM">⏏ B</button>
+      <button class="btn-unload-all" onclick="unloadAll()">⏏ ALL</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Panel -->
+<div class="exp-panel" id="settings-panel">
+  <div class="panel-inner">
+    <div class="settings-grid">
+      <div class="settings-col">
+        <div class="settings-col-title"><div class="badge badge-a"></div>Model A — System Prompt</div>
+        <textarea class="sys-ta" id="sysA" placeholder="System prompt for Model A... e.g. You are Echo. Think deeply inside <think> tags before responding."></textarea>
+        <div class="settings-col-title" style="margin-top:4px"><div class="badge badge-a"></div>Model A — Parameters</div>
+        <div class="param-row"><label>Temperature</label><input type="number" id="tempA" value="0.7" min="0" max="2" step="0.1"></div>
+        <div class="param-row"><label>Top P</label><input type="number" id="topPA" value="0.9" min="0" max="1" step="0.05"></div>
+        <div class="param-row"><label>Top K</label><input type="number" id="topKA" value="40" min="1" max="200"></div>
+        <div class="param-row"><label>Max Tokens</label><input type="number" id="maxTA" value="2048" min="64" max="4096"></div>
+        <div class="param-row"><label>Repeat Penalty</label><input type="number" id="repA" value="1.1" min="1" max="2" step="0.05"></div>
+      </div>
+      <div class="settings-col">
+        <div class="settings-col-title"><div class="badge badge-b"></div>Model B — System Prompt</div>
+        <textarea class="sys-ta" id="sysB" placeholder="System prompt for Model B... e.g. You are Echo. Think deeply inside <think> tags before responding."></textarea>
+        <div class="settings-col-title" style="margin-top:4px"><div class="badge badge-b"></div>Model B — Parameters</div>
+        <div class="param-row"><label>Temperature</label><input type="number" id="tempB" value="0.7" min="0" max="2" step="0.1"></div>
+        <div class="param-row"><label>Top P</label><input type="number" id="topPB" value="0.9" min="0" max="1" step="0.05"></div>
+        <div class="param-row"><label>Top K</label><input type="number" id="topKB" value="40" min="1" max="200"></div>
+        <div class="param-row"><label>Max Tokens</label><input type="number" id="maxTB" value="2048" min="64" max="4096"></div>
+        <div class="param-row"><label>Repeat Penalty</label><input type="number" id="repB" value="1.1" min="1" max="2" step="0.05"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RAG Panel -->
+<div class="exp-panel" id="rag-panel">
+  <div class="panel-inner">
+    <div class="rag-inner">
+      <div class="cfg-label"><div class="badge badge-rag"></div>Memory Folder</div>
+      <input type="text" id="ragPath" placeholder="C:\Users\tavar\OneDrive\Documentos\LLMs\Echo\Data\Llama_Echo memories\All chats" style="flex:1;min-width:200px">
+      <button class="btn-rag" onclick="loadRag()">LOAD FILES</button>
+      <div class="rag-status" id="ragStatus">NOT LOADED</div>
+      <div class="toggle-row" onclick="toggleRag()">
+        <div class="toggle-sw" id="ragToggle"></div>
+        <span>USE RAG</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="chat">
+  <div id="empty">
+    <div class="empty-glyph">⬡</div>
+    <div>SELECT MODELS — SET SYSTEM PROMPTS — HIT AUTO</div>
+    <div>OR TYPE A MESSAGE TO START MANUALLY</div>
+    <div class="empty-tag">PROXYING OLLAMA // LOCALHOST:11434</div>
+  </div>
+</div>
+
+<div id="input-bar">
+  <textarea id="inp" placeholder="Seed message or inject into conversation... (Enter to send, Shift+Enter for newline)"
+    onkeydown="onKey(event)" oninput="resizeTA(this)" rows="1"></textarea>
+  <div class="input-side">
+    <div class="cfg-label"><div class="badge badge-u"></div>You → Both</div>
+    <button class="btn-send" onclick="sendUser()">SEND</button>
+  </div>
+</div>
+
+</div>
+
+<script>
+const API = '';
+let running=false, stop=false, useRag=false, ragLoaded=false;
+let convHistory=[], chatLog=[];
+
+async function init(){
+  try{
+    const r=await fetch(`${API}/api/tags`);
+    const d=await r.json();
+    const models=(d.models||[]).map(m=>m.name);
+    ['modelA','modelB'].forEach((id,i)=>{
+      document.getElementById(id).innerHTML=models.map(m=>{
+        const s=(i===0&&m.includes('LFM2-2.6B'))||(i===1&&m.includes('lfm2.5'));
+        return `<option value="${m}" ${s?'selected':''}>${m}</option>`;
+      }).join('');
+    });
+    setOllama(true,'OLLAMA ONLINE');
+  }catch(e){
+    setOllama(false,'OLLAMA OFFLINE');
+    ['modelA','modelB'].forEach(id=>{ document.getElementById(id).innerHTML='<option>Cannot reach server</option>'; });
+  }
+  try{
+    const r=await fetch(`${API}/api/rag/status`);
+    const d=await r.json();
+    if(d.chunks>0){ ragLoaded=true; updateRagUI(d.chunks,d.files.length); }
+  }catch(e){}
+}
+
+function setOllama(ok,msg){
+  document.getElementById('ollamaDot').className='dot'+(ok?'':' off');
+  document.getElementById('ollamaStatus').textContent=msg;
+}
+
+function togglePanel(id,btnId){
+  const el=document.getElementById(id);
+  el.classList.toggle('open');
+  if(btnId){ document.getElementById(btnId).classList.toggle('open',el.classList.contains('open')); }
+}
+
+async function loadRag(){
+  const folder=document.getElementById('ragPath').value.trim();
+  if(!folder) return alert('Enter folder path first');
+  document.getElementById('ragStatus').textContent='LOADING...';
+  try{
+    const r=await fetch(`${API}/api/rag/load`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folder})});
+    const d=await r.json();
+    if(d.error){ document.getElementById('ragStatus').textContent='ERROR: '+d.error; return; }
+    ragLoaded=true; updateRagUI(d.chunks,d.files);
+    addSys(`◈ RAG LOADED — ${d.chunks} chunks from ${d.files} files`);
+  }catch(e){ document.getElementById('ragStatus').textContent='FAILED — check folder path'; }
+}
+
+function updateRagUI(chunks,files){
+  document.getElementById('ragStatus').textContent=`${chunks} CHUNKS / ${files} FILES`;
+  document.getElementById('ragPill').style.display='flex';
+  document.getElementById('ragInfo').textContent=`RAG ${chunks} CHUNKS`;
+  document.getElementById('btnRag').classList.add('loaded');
+}
+
+function toggleRag(){
+  useRag=!useRag;
+  document.getElementById('ragToggle').className='toggle-sw'+(useRag?' on':'');
+  addSys(useRag?'◈ RAG MEMORY ENABLED':'◈ RAG MEMORY DISABLED');
+}
+
+function getParams(side){
+  const s=side==='A'?'A':'B';
+  return {
+    temperature:parseFloat(document.getElementById('temp'+s).value)||0.7,
+    top_p:parseFloat(document.getElementById('topP'+s).value)||0.9,
+    top_k:parseInt(document.getElementById('topK'+s).value)||40,
+    num_predict:parseInt(document.getElementById('maxT'+s).value)||512,
+    repeat_penalty:parseFloat(document.getElementById('rep'+s).value)||1.1,
+  };
+}
+function getSys(side){ return document.getElementById('sys'+(side==='A'?'A':'B')).value.trim(); }
+
+function hideEmpty(){ const e=document.getElementById('empty'); if(e) e.remove(); }
+
+function addSys(text){
+  hideEmpty();
+  const el=document.createElement('div'); el.className='sys'; el.textContent=text;
+  document.getElementById('chat').appendChild(el);
+  chatLog.push({type:'sys',text}); scrollBottom();
+}
+
+function addMsg(role,modelName,content='',streaming=false){
+  hideEmpty();
+  const shortName=modelName.split(':')[0].split('/').pop().substring(0,5).toUpperCase();
+  const label=role==='mu'?'YOU':shortName;
+  const fromLabel=role==='mu'?'// YOU':'// '+modelName.split(':')[0].split('/').pop();
+  const wrap=document.createElement('div'); wrap.className=`msg ${role}`;
+  const {thinkHtml,responseHtml}=parseThink(content);
+  wrap.innerHTML=`
+    <div class="avatar">${label.substring(0,3)}</div>
+    <div class="bubble">
+      <div class="msg-from">${fromLabel}</div>
+      <div class="think-area">${thinkHtml}</div>
+      <div class="resp-area">${streaming?'<div class="typing"><div class="td"></div><div class="td"></div><div class="td"></div></div>':responseHtml}</div>
+    </div>`;
+  document.getElementById('chat').appendChild(wrap);
+  scrollBottom(); return wrap;
+}
+
+function updateMsg(el,content){
+  const {thinkHtml,responseHtml}=parseThink(content);
+  el.querySelector('.think-area').innerHTML=thinkHtml;
+  el.querySelector('.resp-area').innerHTML=responseHtml+'<span style="opacity:.4">▌</span>';
+  scrollBottom();
+}
+
+function finalizeMsg(el,content,modelName,role){
+  const {thinkHtml,responseHtml}=parseThink(content);
+  el.querySelector('.think-area').innerHTML=thinkHtml;
+  if(responseHtml){
+    el.querySelector('.resp-area').innerHTML=responseHtml;
+  } else if(thinkHtml){
+    // Model thought but gave no text — show subtle indicator
+    el.querySelector('.resp-area').innerHTML='<span style="color:var(--dim);font-size:10px;font-style:italic">&#9672;</span>';
+  }
+  const thinkText=content.match(/<think>([\s\S]*?)<\/think>/)?.[1]||'';
+  const cleanText=content.replace(/<think>[\s\S]*?<\/think>/g,'').trim();
+  chatLog.push({type:'msg',role,model:modelName,think:thinkText,text:cleanText||thinkText});
+  scrollBottom();
+  return cleanText||thinkText||content;
+}
+
+function parseThink(raw){
+  // Case 1: complete <think>...</think> block
+  var m = raw.match(/<think>([\s\S]*?)<\/think>/);
+  if(m){
+    var tc = m[1].trim();
+    var after = raw.replace(/<think>[\s\S]*?<\/think>/g,'').trim();
+    return {
+      thinkHtml: tc ? '<div class="think"><div class="think-lbl">&#9672; THINKING</div>'+mdEsc(tc)+'</div>' : '',
+      responseHtml: after ? renderMd(after) : ''
+    };
+  }
+  // Case 2: currently inside <think> tag (streaming, no close yet)
+  var oi = raw.indexOf('<think>');
+  if(oi !== -1){
+    var soFar = raw.substring(oi+7);
+    var before = raw.substring(0,oi).trim();
+    return {
+      thinkHtml: '<div class="think"><div class="think-lbl">&#9672; THINKING...</div>'+mdEsc(soFar)+'</div>',
+      responseHtml: before ? renderMd(before) : ''
+    };
+  }
+  // Case 3: no think tags
+  return {thinkHtml:'', responseHtml: raw.trim() ? renderMd(raw.trim()) : ''};
+}
+
+// mdEsc: escape HTML only — used inside think block (no markdown rendering there)
+function mdEsc(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+// renderMd: escape + markdown render — used for response text
+function renderMd(s){
+  s=s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  s=s.replace(/\*\*([^*\n]+?)\*\*/g,'<strong>$1</strong>');
+  s=s.replace(/(^|\s)\*([^*\n]+?)\*($|\s)/g,'$1<em>$2</em>$3');
+  s=s.replace(/^### (.+)$/gm,'<div style="color:var(--c);font-size:11px;font-weight:600;margin:4px 0 2px">$1</div>');
+  s=s.replace(/^## (.+)$/gm,'<div style="color:var(--a);font-size:12px;font-weight:700;margin:5px 0 2px">$1</div>');
+  // Only convert --- (3+ dashes on own line) to hr — NOT -- 
+  s=s.replace(/^-{3,}$/gm,'<hr style="border:none;border-top:1px solid var(--border);margin:5px 0">');
+  s=s.replace(/\n/g,'<br>');
+  return s;
+}
+
+function nl2br(s){ return renderMd(s); }
+function scrollBottom(){ const c=document.getElementById('chat'); c.scrollTop=c.scrollHeight; }
+
+async function stream(modelName,messages,options,el){
+  const res=await fetch(`${API}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:modelName,messages,stream:true,use_rag:useRag&&ragLoaded,options,keep_alive:"10m"})});
+  let thinking='';   // accumulated thinking content
+  let response='';  // accumulated response content
+  const reader=res.body.getReader(); const dec=new TextDecoder(); let lastUI=0;
+  while(true){
+    if(stop) break;
+    const {done,value}=await reader.read(); if(done) break;
+    const lines=dec.decode(value).split('\n').filter(l=>l.trim());
+    for(const line of lines){
+      try{
+        const j=JSON.parse(line);
+        if(j.message){
+          // Native thinking field (LFM2.5-thinking, some Qwen models)
+          if(j.message.thinking) thinking+=j.message.thinking;
+          // Regular response content
+          if(j.message.content) response+=j.message.content;
+          // Build combined string for display
+          const display=(thinking?'<think>'+thinking+'</think>':'')+response;
+          if(Date.now()-lastUI>40){ updateMsg(el,display); lastUI=Date.now(); }
+        }
+      }catch(e){}
+    }
+  }
+  // Final render pass
+  const full=(thinking?'<think>'+thinking+'</think>':'')+response;
+  updateMsg(el, full);
+  return full;
+}
+
+function buildMsgs(history,isA,mA,mB,sysPrompt){
+  const msgs=[];
+  if(sysPrompt) msgs.push({role:'system',content:sysPrompt});
+  // Count which assistant turn this is — alternates A/B/A/B
+  // We assign 'assistant' when the turn belongs to the current model (isA),
+  // 'user' when it belongs to the other. This works even when mA===mB.
+  let assistantTurn=0; // 0=A spoke, 1=B spoke, alternating
+  for(const h of history){
+    if(h.role==='user'){
+      msgs.push({role:'user',content:h.content});
+    } else {
+      // Assign role based on which model's turn it was
+      const wasA = (assistantTurn % 2 === 0);
+      msgs.push({role: (wasA===isA) ? 'assistant' : 'user', content:h.content});
+      assistantTurn++;
+    }
+  }
+  return msgs;
+}
+
+async function startAuto(){
+  const mA=document.getElementById('modelA').value;
+  const mB=document.getElementById('modelB').value;
+  const turns=parseInt(document.getElementById('turns').value)||4;
+  if(!mA||!mB) return alert('Select both models!');
+  stop=false; running=true;
+  document.getElementById('btnAuto').style.display='none';
+  document.getElementById('btnStop').style.display='inline-block';
+  setOllama(true,'RUNNING');
+  const seedText=document.getElementById('inp').value.trim()||"Hello! Let's have a thoughtful conversation.";
+  if(document.getElementById('inp').value.trim()){
+    addMsg('mu','User',seedText);
+    chatLog.push({type:'msg',role:'mu',model:'User',think:'',text:seedText});
+    document.getElementById('inp').value=''; resizeTA(document.getElementById('inp'));
+  }
+  addSys(`▶ AUTO — ${turns} TURNS — ${mA.split('/').pop().split(':')[0]} ↔ ${mB.split('/').pop().split(':')[0]}`);
+  convHistory=[{role:'user',content:seedText}];
+  for(let i=0;i<turns*2;i++){
+    if(stop) break;
+    const isA=i%2===0;
+    const model=isA?mA:mB;
+    const role=isA?'ma':'mb';
+    const el=addMsg(role,model,'',true);
+    setOllama(true,`${model.split('/').pop().split(':')[0].toUpperCase()} THINKING...`);
+    try{
+      const msgs=buildMsgs(convHistory,isA,mA,mB,getSys(isA?'A':'B'));
+      const resp=await stream(model,msgs,getParams(isA?'A':'B'),el);
+      if(resp===null||resp===undefined) break;
+      const cleanResp=finalizeMsg(el,resp,model,role);
+      convHistory.push({role:'assistant',content:cleanResp,model});
+      await sleep(600);
+    }catch(e){ finalizeMsg(el,`[Error: ${e.message}]`,model,role); break; }
+  }
+  addSys('■ CONVERSATION ENDED');
+  endSession();
+}
+
+async function sendUser(){
+  const inp=document.getElementById('inp');
+  const text=inp.value.trim(); if(!text) return;
+  addMsg('mu','User',text);
+  chatLog.push({type:'msg',role:'mu',model:'User',think:'',text});
+  inp.value=''; resizeTA(inp);
+  convHistory.push({role:'user',content:text});
+  const mA=document.getElementById('modelA').value;
+  const mB=document.getElementById('modelB').value;
+  if(!mA) return;
+  stop=false; running=true;
+  document.getElementById('btnStop').style.display='inline-block';
+  const elA=addMsg('ma',mA,'',true);
+  setOllama(true,'RESPONDING...');
+  try{
+    const respA=await stream(mA,buildMsgs(convHistory,true,mA,mB,getSys('A')),getParams('A'),elA);
+    const cleanA=finalizeMsg(elA,respA,mA,'ma');
+    if(respA) convHistory.push({role:'assistant',content:cleanA,model:mA});
+    if(mB&&!stop){
+      await sleep(300);
+      const elB=addMsg('mb',mB,'',true);
+      const respB=await stream(mB,buildMsgs(convHistory,false,mA,mB,getSys('B')),getParams('B'),elB);
+      const cleanB=finalizeMsg(elB,respB,mB,'mb');
+      if(respB) convHistory.push({role:'assistant',content:cleanB,model:mB});
+    }
+  }catch(e){ console.error(e); }
+  endSession();
+}
+
+function saveChat(){
+  if(!chatLog.length){ alert('Nothing to save yet!'); return; }
+  const mA=document.getElementById('modelA').value.split('/').pop();
+  const mB=document.getElementById('modelB').value.split('/').pop();
+  const now=new Date().toISOString().replace(/[:.]/g,'-').substring(0,19);
+  let txt=`ECHO // DUAL MIND — Chat Export\n`;
+  txt+=`Date: ${new Date().toLocaleString()}\n`;
+  txt+=`Model A: ${mA}\nModel B: ${mB}\n`;
+  txt+=`System A: ${getSys('A')||'(none)'}\nSystem B: ${getSys('B')||'(none)'}\n`;
+  txt+=`RAG: ${useRag&&ragLoaded?'ENABLED':'DISABLED'}\n`;
+  txt+=`${'─'.repeat(60)}\n\n`;
+  for(const e of chatLog){
+    if(e.type==='sys'){ txt+=`[${e.text}]\n\n`; continue; }
+    const label=e.role==='mu'?'YOU':e.model.split('/').pop().split(':')[0].toUpperCase();
+    txt+=`${label}:\n`;
+    if(e.think) txt+=`<think>\n${e.think}\n</think>\n`;
+    txt+=`${e.text}\n\n`;
+  }
+  const blob=new Blob([txt],{type:'text/plain'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`echo-chat-${now}.txt`; a.click();
+}
+
+function stopAll(){ stop=true; addSys('■ STOPPED'); endSession(); }
+
+async function unloadModel(side){
+  const model=document.getElementById('model'+side).value;
+  if(!model) return;
+  try{
+    await fetch(`${API}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model,messages:[],keep_alive:0})});
+    addSys(`⏏ UNLOADED — ${model.split('/').pop().split(':')[0]}`);
+  }catch(e){ addSys(`⏏ UNLOAD FAILED — ${e.message}`); }
+}
+
+async function unloadAll(){
+  const mA=document.getElementById('modelA').value;
+  const mB=document.getElementById('modelB').value;
+  const toUnload=[...new Set([mA,mB].filter(Boolean))];
+  for(const model of toUnload){
+    try{
+      await fetch(`${API}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model,messages:[],keep_alive:0})});
+    }catch(e){}
+  }
+  addSys('⏏ ALL MODELS UNLOADED FROM VRAM');
+}
+
+function endSession(){
+  running=false;
+  document.getElementById('btnAuto').style.display='inline-block';
+  document.getElementById('btnStop').style.display='none';
+  setOllama(true,'READY');
+}
+
+function clearAll(){
+  document.getElementById('chat').innerHTML=`
+    <div id="empty">
+      <div class="empty-glyph">⬡</div>
+      <div>SELECT MODELS — SET SYSTEM PROMPTS — HIT AUTO</div>
+      <div>OR TYPE A MESSAGE TO START MANUALLY</div>
+      <div class="empty-tag">PROXYING OLLAMA // LOCALHOST:11434</div>
+    </div>`;
+  convHistory=[]; chatLog=[]; endSession();
+}
+
+function onKey(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendUser();} }
+function resizeTA(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px'; }
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+init();
+</script>
+</body>
+</html>
