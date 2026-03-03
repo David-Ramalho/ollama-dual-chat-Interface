@@ -12,6 +12,8 @@
 ---
 
 ## What Is Echo Dual Mind?
+<img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/e8a8741d-bf91-4779-bd01-d6bb1f25a5dd" />
+
 
 Echo Dual Mind is a self-hosted, two-model chat environment. Instead of talking to one AI at a time, you can:
 
