@@ -22,7 +22,7 @@
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
-html, body { height:100%; background:var(--bg); color:var(--txt); font-family:'JetBrains Mono',monospace; overflow:hidden; }
+html, body { height:100%; background:var(--bg); color:var(--txt); font-family:'JetBrains Mono',monospace; overflow:hidden; margin:0; padding:0; }
 
 body::after {
   content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
@@ -31,7 +31,7 @@ body::after {
     radial-gradient(ellipse 50% 30% at 80% 100%, rgba(255,106,154,0.05) 0%, transparent 60%);
 }
 
-#app { display:flex; flex-direction:column; height:100vh; position:relative; z-index:1; }
+#app { position:relative; z-index:1; }
 
 header {
   display:flex; align-items:center; justify-content:space-between;
@@ -108,7 +108,7 @@ button:disabled { opacity:.35; cursor:not-allowed; }
   background:var(--bg2); border-bottom:1px solid var(--border);
   max-height:0; overflow:hidden; transition:max-height .3s ease; flex-shrink:0;
 }
-.exp-panel.open { max-height:500px; }
+.exp-panel.open { max-height:600px; }
 .panel-inner { padding:12px 18px; }
 
 .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
@@ -120,6 +120,12 @@ button:disabled { opacity:.35; cursor:not-allowed; }
 .sys-ta { resize:vertical; min-height:58px; max-height:100px; font-size:10px; line-height:1.5; }
 
 .rag-inner { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.rag-cfg-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+.rag-cfg-col { display:flex; flex-direction:column; gap:5px; }
+.rag-cfg-col-title { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--dim); margin-bottom:2px; }
+.rag-estimator { margin-top:8px; background:var(--bg3); border:1px solid var(--border); border-radius:4px; padding:8px 10px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+.rag-est-label { font-size:9px; letter-spacing:1px; color:var(--dim); }
+.rag-est-val { font-size:10px; color:var(--c); letter-spacing:1px; }
 .rag-status { font-size:10px; color:var(--c); letter-spacing:1px; white-space:nowrap; }
 .toggle-row { display:flex; align-items:center; gap:6px; font-size:9px; color:var(--dim); cursor:pointer; letter-spacing:1px; }
 .toggle-sw { width:28px; height:15px; background:var(--bg4); border:1px solid var(--border); border-radius:8px; position:relative; transition:background .2s; flex-shrink:0; }
@@ -166,17 +172,139 @@ button:disabled { opacity:.35; cursor:not-allowed; }
 
 .sys { align-self:center; font-size:9px; letter-spacing:1.5px; color:var(--dim); padding:3px 12px; background:rgba(255,255,255,.02); border-radius:20px; border:1px solid var(--border); }
 
+/* Token badge under each bubble */
+.token-badge { font-size:8px; letter-spacing:1px; color:var(--dim); margin-top:4px; padding:0 2px; display:none; }
+.ma .token-badge { text-align:left; color:rgba(124,106,255,.5); }
+.mb .token-badge { text-align:right; color:rgba(255,106,154,.5); }
+
+/* RAG log area inside the RAG panel */
+.rag-log-wrap { margin-top:10px; border-top:1px solid var(--border); padding-top:8px; display:none; }
+.rag-log-wrap.open { display:block; }
+.rag-log-title { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--c); margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; }
+.rag-log-list { max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+.rag-log-list::-webkit-scrollbar { width:2px; }
+.rag-log-list::-webkit-scrollbar-thumb { background:var(--border); }
+.rag-log-entry { background:var(--bg3); border:1px solid var(--border); border-radius:4px; padding:6px 9px; font-size:9px; }
+.rag-log-query { color:var(--u); letter-spacing:.5px; margin-bottom:4px; }
+.rag-log-chunk { color:var(--dim); border-left:2px solid var(--border); padding-left:6px; margin-top:3px; font-size:8px; line-height:1.5; }
+.rag-log-chunk-src { color:var(--c); font-size:8px; margin-bottom:1px; }
+
+/* ── SIDEBAR ───────────────────────────────────────────────────────────────── */
+#root { display:flex; height:100vh; overflow:hidden; }
+
+#sidebar {
+  width:220px; min-width:220px; background:var(--bg2); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; transition:width .25s ease, min-width .25s ease;
+  overflow:hidden; flex-shrink:0; position:relative; z-index:10;
+}
+#sidebar.collapsed { width:32px; min-width:32px; }
+
+#app { flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+
+.sb-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 10px 8px; border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.sb-title { font-size:9px; letter-spacing:2px; color:var(--a); text-transform:uppercase; white-space:nowrap; overflow:hidden; }
+.sb-toggle {
+  width:20px; height:20px; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:var(--dim); font-size:11px; flex-shrink:0; border-radius:3px;
+  transition:color .2s;
+}
+.sb-toggle:hover { color:var(--a); }
+#sidebar.collapsed .sb-title { display:none; }
+#sidebar.collapsed .sb-new-btn span { display:none; }
+
+.sb-new-btn {
+  margin:8px; padding:6px 10px; background:var(--a); border:none; border-radius:4px;
+  color:#fff; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:1.5px;
+  text-transform:uppercase; cursor:pointer; display:flex; align-items:center; gap:6px;
+  transition:background .2s; white-space:nowrap; overflow:hidden;
+}
+.sb-new-btn:hover { background:#9580ff; }
+#sidebar.collapsed .sb-new-btn { justify-content:center; padding:6px; }
+
+.sb-folder-btn {
+  margin:0 8px 6px; padding:5px 8px; background:transparent; border:1px solid var(--border);
+  border-radius:4px; color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:8px;
+  letter-spacing:1px; text-transform:uppercase; cursor:pointer; display:flex;
+  align-items:center; gap:5px; transition:all .2s; white-space:nowrap; overflow:hidden;
+}
+.sb-folder-btn:hover { border-color:var(--c); color:var(--c); }
+#sidebar.collapsed .sb-folder-btn { display:none; }
+
+.sb-list { flex:1; overflow-y:auto; padding:4px 0; }
+.sb-list::-webkit-scrollbar { width:2px; }
+.sb-list::-webkit-scrollbar-thumb { background:var(--border); }
+
+.sb-folder {
+  margin:4px 8px 2px; font-size:8px; letter-spacing:2px; text-transform:uppercase;
+  color:var(--c); display:flex; align-items:center; gap:5px; cursor:pointer;
+  padding:3px 0; border-bottom:1px solid rgba(106,255,221,.1);
+}
+.sb-folder-arrow { transition:transform .2s; }
+.sb-folder.closed .sb-folder-arrow { transform:rotate(-90deg); }
+.sb-folder-chats { overflow:hidden; }
+.sb-folder-chats.closed { display:none; }
+#sidebar.collapsed .sb-folder { display:none; }
+
+.sb-chat-item {
+  display:flex; align-items:center; gap:6px; padding:6px 10px; cursor:pointer;
+  border-radius:4px; margin:1px 4px; transition:background .15s; min-width:0;
+}
+.sb-chat-item:hover { background:var(--bg3); }
+.sb-chat-item.active { background:rgba(124,106,255,.12); border-left:2px solid var(--a); padding-left:8px; }
+.sb-chat-info { flex:1; min-width:0; overflow:hidden; }
+.sb-chat-name { font-size:9px; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sb-chat-meta { font-size:8px; color:var(--dim); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sb-chat-del {
+  width:14px; height:14px; display:none; align-items:center; justify-content:center;
+  color:var(--b); font-size:10px; border-radius:2px; flex-shrink:0; line-height:1;
+}
+.sb-chat-item:hover .sb-chat-del { display:flex; }
+.sb-chat-del:hover { background:rgba(255,106,154,.15); }
+#sidebar.collapsed .sb-chat-info,
+#sidebar.collapsed .sb-chat-del { display:none; }
+
+.sb-move-menu {
+  position:fixed; background:var(--bg3); border:1px solid var(--border); border-radius:4px;
+  padding:4px; z-index:100; font-size:9px; min-width:140px; box-shadow:0 4px 16px rgba(0,0,0,.4);
+}
+.sb-move-opt { padding:5px 10px; cursor:pointer; border-radius:3px; color:var(--txt); letter-spacing:.5px; }
+.sb-move-opt:hover { background:var(--bg4); color:var(--a); }
+
+.sb-empty { padding:20px 10px; text-align:center; font-size:9px; color:var(--dim); letter-spacing:1px; }
+#sidebar.collapsed .sb-empty { display:none; }
+
+/* Restore #app flex behaviour (was on html,body — now lives inside #root) */
 #input-bar { padding:10px 18px; border-top:1px solid var(--border); background:var(--bg2); display:flex; gap:9px; align-items:flex-end; flex-shrink:0; }
 #inp { flex:1; min-height:38px; max-height:100px; line-height:1.5; font-size:12px; padding:8px 11px; }
 .input-side { display:flex; flex-direction:column; gap:3px; align-items:flex-end; }
 </style>
-</head>
 <body>
+<div id="root">
+
+<!-- ── SIDEBAR ─────────────────────────────────────────────────────────── -->
+<div id="sidebar">
+  <div class="sb-header">
+    <div class="sb-title">◈ CHATS</div>
+    <div class="sb-toggle" id="sbToggleBtn" onclick="toggleSidebar()" title="Collapse">◀</div>
+  </div>
+  <button class="sb-new-btn" onclick="newChat()">＋ <span>NEW CHAT</span></button>
+  <button class="sb-folder-btn" onclick="createFolder()">⊞ NEW FOLDER</button>
+  <div class="sb-list" id="sbList">
+    <div class="sb-empty" id="sbEmpty">No saved chats yet.<br><br>Chats auto-save when a session ends.</div>
+  </div>
+</div>
+
 <div id="app">
 
 <header>
   <div class="logo">ECHO // DUAL MIND</div>
   <div class="hdr-right">
+    <div class="pill" id="turnPill" style="display:none"><div class="dot" style="background:var(--u);box-shadow:0 0 5px var(--u)"></div><span id="turnInfo">TURN 0 / 0</span></div>
+    <div class="pill" id="tokPillA" style="display:none"><div class="badge badge-a" style="width:5px;height:5px"></div><span id="tokInfoA">A: — tok</span></div>
+    <div class="pill" id="tokPillB" style="display:none"><div class="badge badge-b" style="width:5px;height:5px"></div><span id="tokInfoB">B: — tok</span></div>
     <div class="pill"><div class="dot" id="ollamaDot"></div><span id="ollamaStatus">CONNECTING...</span></div>
     <div class="pill" id="ragPill" style="display:none"><div class="dot" style="background:var(--c);box-shadow:0 0 5px var(--c)"></div><span id="ragInfo">RAG</span></div>
   </div>
@@ -225,6 +353,7 @@ button:disabled { opacity:.35; cursor:not-allowed; }
         <div class="param-row"><label>Top K</label><input type="number" id="topKA" value="40" min="1" max="200"></div>
         <div class="param-row"><label>Max Tokens</label><input type="number" id="maxTA" value="2048" min="64" max="4096"></div>
         <div class="param-row"><label>Repeat Penalty</label><input type="number" id="repA" value="1.1" min="1" max="2" step="0.05"></div>
+        <div class="param-row"><label>Context Length</label><input type="number" id="ctxA" value="4096" min="512" max="131072" step="512"></div>
       </div>
       <div class="settings-col">
         <div class="settings-col-title"><div class="badge badge-b"></div>Model B — System Prompt</div>
@@ -235,6 +364,7 @@ button:disabled { opacity:.35; cursor:not-allowed; }
         <div class="param-row"><label>Top K</label><input type="number" id="topKB" value="40" min="1" max="200"></div>
         <div class="param-row"><label>Max Tokens</label><input type="number" id="maxTB" value="2048" min="64" max="4096"></div>
         <div class="param-row"><label>Repeat Penalty</label><input type="number" id="repB" value="1.1" min="1" max="2" step="0.05"></div>
+        <div class="param-row"><label>Context Length</label><input type="number" id="ctxB" value="4096" min="512" max="131072" step="512"></div>
       </div>
     </div>
   </div>
@@ -243,16 +373,59 @@ button:disabled { opacity:.35; cursor:not-allowed; }
 <!-- RAG Panel -->
 <div class="exp-panel" id="rag-panel">
   <div class="panel-inner">
+
+    <!-- Row 1: folder + status + toggles -->
     <div class="rag-inner">
       <div class="cfg-label"><div class="badge badge-rag"></div>Memory Folder</div>
-      <input type="text" id="ragPath" placeholder="C:\Users\tavar\OneDrive\Documentos\LLMs\Echo\Data\Llama_Echo memories\All chats" style="flex:1;min-width:200px">
+      <input type="text" id="ragPath" placeholder="C:\path\to\your\txt\files" style="flex:1;min-width:200px">
       <button class="btn-rag" onclick="loadRag()">LOAD FILES</button>
       <div class="rag-status" id="ragStatus">NOT LOADED</div>
       <div class="toggle-row" onclick="toggleRag()">
         <div class="toggle-sw" id="ragToggle"></div>
         <span>USE RAG</span>
       </div>
+      <button class="btn-rag" id="btnRagLog" onclick="toggleRagLog()" style="display:none">◈ VIEW LOG</button>
     </div>
+
+    <!-- Row 2: chunk + retrieval config -->
+    <div class="rag-cfg-grid">
+      <div class="rag-cfg-col">
+        <div class="rag-cfg-col-title">Chunk Size (words)</div>
+        <input type="number" id="ragChunkSize" value="500" min="50" max="4000" step="50" oninput="updateEstimator()">
+        <div style="font-size:8px;color:var(--dim);margin-top:1px">Words per chunk. Larger = more context per chunk.</div>
+      </div>
+      <div class="rag-cfg-col">
+        <div class="rag-cfg-col-title">Overlap (words)</div>
+        <input type="number" id="ragOverlap" value="50" min="0" max="500" step="10" oninput="updateEstimator()">
+        <div style="font-size:8px;color:var(--dim);margin-top:1px">Words shared between adjacent chunks.</div>
+      </div>
+      <div class="rag-cfg-col">
+        <div class="rag-cfg-col-title">Retrieve Top-K</div>
+        <input type="number" id="ragTopK" value="5" min="1" max="20" step="1">
+        <div style="font-size:8px;color:var(--dim);margin-top:1px">Chunks injected per query.</div>
+      </div>
+    </div>
+
+    <!-- Row 3: chunk estimator -->
+    <div class="rag-estimator">
+      <div>
+        <div class="rag-est-label">ESTIMATOR — enter your file's character count:</div>
+      </div>
+      <input type="number" id="ragEstChars" placeholder="e.g. 3845" min="1" style="max-width:120px" oninput="updateEstimator()">
+      <div><span class="rag-est-label">≈ WORDS: </span><span class="rag-est-val" id="estWords">—</span></div>
+      <div><span class="rag-est-label">CHUNKS PRODUCED: </span><span class="rag-est-val" id="estChunks">—</span></div>
+      <div><span class="rag-est-label">CHUNKS RETRIEVED: </span><span class="rag-est-val" id="estRetrieved">—</span></div>
+    </div>
+
+    <!-- Row 4: retrieval log -->
+    <div class="rag-log-wrap" id="ragLogWrap">
+      <div class="rag-log-title">
+        <span>◈ RETRIEVAL LOG</span>
+        <button style="font-size:8px;padding:2px 8px" onclick="clearRagLog()">CLEAR</button>
+      </div>
+      <div class="rag-log-list" id="ragLogList"><div style="color:var(--dim);font-size:9px">No retrievals yet.</div></div>
+    </div>
+
   </div>
 </div>
 
@@ -275,11 +448,15 @@ button:disabled { opacity:.35; cursor:not-allowed; }
 </div>
 
 </div>
+<!-- end #app -->
+</div>
+<!-- end #root -->
 
 <script>
 const API = '';
 let running=false, stop=false, useRag=false, ragLoaded=false;
 let convHistory=[], chatLog=[];
+let chatDirty=false;  // true only when new messages added — prevents saving a just-loaded chat
 
 async function init(){
   try{
@@ -318,21 +495,17 @@ function togglePanel(id,btnId){
 async function loadRag(){
   const folder=document.getElementById('ragPath').value.trim();
   if(!folder) return alert('Enter folder path first');
+  const chunkSize=parseInt(document.getElementById('ragChunkSize').value)||500;
+  const overlap=parseInt(document.getElementById('ragOverlap').value)||50;
   document.getElementById('ragStatus').textContent='LOADING...';
   try{
-    const r=await fetch(`${API}/api/rag/load`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folder})});
+    const r=await fetch(`${API}/api/rag/load`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder, chunk_size:chunkSize, overlap})});
     const d=await r.json();
     if(d.error){ document.getElementById('ragStatus').textContent='ERROR: '+d.error; return; }
     ragLoaded=true; updateRagUI(d.chunks,d.files);
-    addSys(`◈ RAG LOADED — ${d.chunks} chunks from ${d.files} files`);
+    addSys(`◈ RAG LOADED — ${d.chunks} chunks from ${d.files} files (chunk:${chunkSize}w overlap:${overlap}w)`);
   }catch(e){ document.getElementById('ragStatus').textContent='FAILED — check folder path'; }
-}
-
-function updateRagUI(chunks,files){
-  document.getElementById('ragStatus').textContent=`${chunks} CHUNKS / ${files} FILES`;
-  document.getElementById('ragPill').style.display='flex';
-  document.getElementById('ragInfo').textContent=`RAG ${chunks} CHUNKS`;
-  document.getElementById('btnRag').classList.add('loaded');
 }
 
 function toggleRag(){
@@ -349,6 +522,7 @@ function getParams(side){
     top_k:parseInt(document.getElementById('topK'+s).value)||40,
     num_predict:parseInt(document.getElementById('maxT'+s).value)||512,
     repeat_penalty:parseFloat(document.getElementById('rep'+s).value)||1.1,
+    num_ctx:parseInt(document.getElementById('ctx'+s).value)||4096,
   };
 }
 function getSys(side){ return document.getElementById('sys'+(side==='A'?'A':'B')).value.trim(); }
@@ -375,6 +549,7 @@ function addMsg(role,modelName,content='',streaming=false){
       <div class="msg-from">${fromLabel}</div>
       <div class="think-area">${thinkHtml}</div>
       <div class="resp-area">${streaming?'<div class="typing"><div class="td"></div><div class="td"></div><div class="td"></div></div>':responseHtml}</div>
+      <div class="token-badge"></div>
     </div>`;
   document.getElementById('chat').appendChild(wrap);
   scrollBottom(); return wrap;
@@ -447,13 +622,20 @@ function renderMd(s){
 }
 
 function nl2br(s){ return renderMd(s); }
-function scrollBottom(){ const c=document.getElementById('chat'); c.scrollTop=c.scrollHeight; }
+function scrollBottom(){
+  const c=document.getElementById('chat');
+  // Only auto-scroll if user is within 80px of the bottom
+  // If they've scrolled up, don't hijack their position
+  const distFromBottom = c.scrollHeight - c.scrollTop - c.clientHeight;
+  if(distFromBottom < 80) c.scrollTop=c.scrollHeight;
+}
 
 async function stream(modelName,messages,options,el){
   const res=await fetch(`${API}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:modelName,messages,stream:true,use_rag:useRag&&ragLoaded,options,keep_alive:"10m"})});
+    body:JSON.stringify({model:modelName,messages,stream:true,use_rag:useRag&&ragLoaded,rag_top_k:parseInt(document.getElementById('ragTopK').value)||5,options,keep_alive:"10m"})});
   let thinking='';   // accumulated thinking content
   let response='';  // accumulated response content
+  let promptTokens=0, evalTokens=0;
   const reader=res.body.getReader(); const dec=new TextDecoder(); let lastUI=0;
   while(true){
     if(stop) break;
@@ -471,13 +653,18 @@ async function stream(modelName,messages,options,el){
           const display=(thinking?'<think>'+thinking+'</think>':'')+response;
           if(Date.now()-lastUI>40){ updateMsg(el,display); lastUI=Date.now(); }
         }
+        // Final chunk carries token usage
+        if(j.done){
+          promptTokens=j.prompt_eval_count||0;
+          evalTokens=j.eval_count||0;
+        }
       }catch(e){}
     }
   }
   // Final render pass
   const full=(thinking?'<think>'+thinking+'</think>':'')+response;
   updateMsg(el, full);
-  return full;
+  return {text:full, promptTokens, evalTokens};
 }
 
 function buildMsgs(history,isA,mA,mB,sysPrompt){
@@ -505,10 +692,11 @@ async function startAuto(){
   const mB=document.getElementById('modelB').value;
   const turns=parseInt(document.getElementById('turns').value)||4;
   if(!mA||!mB) return alert('Select both models!');
-  stop=false; running=true;
+  stop=false; running=true; chatDirty=true;
   document.getElementById('btnAuto').style.display='none';
   document.getElementById('btnStop').style.display='inline-block';
   setOllama(true,'RUNNING');
+  updateTurnPill(0,turns);
   const seedText=document.getElementById('inp').value.trim()||"Hello! Let's have a thoughtful conversation.";
   if(document.getElementById('inp').value.trim()){
     addMsg('mu','User',seedText);
@@ -522,14 +710,20 @@ async function startAuto(){
     const isA=i%2===0;
     const model=isA?mA:mB;
     const role=isA?'ma':'mb';
+    const currentTurn=Math.floor(i/2)+1;
+    updateTurnPill(currentTurn,turns);
     const el=addMsg(role,model,'',true);
     setOllama(true,`${model.split('/').pop().split(':')[0].toUpperCase()} THINKING...`);
     try{
       const msgs=buildMsgs(convHistory,isA,mA,mB,getSys(isA?'A':'B'));
-      const resp=await stream(model,msgs,getParams(isA?'A':'B'),el);
+      const result=await stream(model,msgs,getParams(isA?'A':'B'),el);
+      if(result===null||result===undefined) break;
+      const {text:resp, promptTokens, evalTokens}=result;
       if(resp===null||resp===undefined) break;
       const cleanResp=finalizeMsg(el,resp,model,role);
+      showTokens(el,promptTokens,evalTokens,isA?'A':'B');
       convHistory.push({role:'assistant',content:cleanResp,model});
+      if(useRag&&ragLoaded) fetchRagLog();
       await sleep(600);
     }catch(e){ finalizeMsg(el,`[Error: ${e.message}]`,model,role); break; }
   }
@@ -547,20 +741,26 @@ async function sendUser(){
   const mA=document.getElementById('modelA').value;
   const mB=document.getElementById('modelB').value;
   if(!mA) return;
-  stop=false; running=true;
+  stop=false; running=true; chatDirty=true;
   document.getElementById('btnStop').style.display='inline-block';
   const elA=addMsg('ma',mA,'',true);
   setOllama(true,'RESPONDING...');
   try{
-    const respA=await stream(mA,buildMsgs(convHistory,true,mA,mB,getSys('A')),getParams('A'),elA);
+    const resultA=await stream(mA,buildMsgs(convHistory,true,mA,mB,getSys('A')),getParams('A'),elA);
+    const {text:respA, promptTokens:ptA, evalTokens:etA}=resultA||{};
     const cleanA=finalizeMsg(elA,respA,mA,'ma');
+    showTokens(elA,ptA,etA,'A');
     if(respA) convHistory.push({role:'assistant',content:cleanA,model:mA});
+    if(useRag&&ragLoaded) fetchRagLog();
     if(mB&&!stop){
       await sleep(300);
       const elB=addMsg('mb',mB,'',true);
-      const respB=await stream(mB,buildMsgs(convHistory,false,mA,mB,getSys('B')),getParams('B'),elB);
+      const resultB=await stream(mB,buildMsgs(convHistory,false,mA,mB,getSys('B')),getParams('B'),elB);
+      const {text:respB, promptTokens:ptB, evalTokens:etB}=resultB||{};
       const cleanB=finalizeMsg(elB,respB,mB,'mb');
+      showTokens(elB,ptB,etB,'B');
       if(respB) convHistory.push({role:'assistant',content:cleanB,model:mB});
+      if(useRag&&ragLoaded) fetchRagLog();
     }
   }catch(e){ console.error(e); }
   endSession();
@@ -618,7 +818,10 @@ function endSession(){
   running=false;
   document.getElementById('btnAuto').style.display='inline-block';
   document.getElementById('btnStop').style.display='none';
+  document.getElementById('turnPill').style.display='none';
   setOllama(true,'READY');
+  // Only save if new messages were actually generated (not just a loaded chat)
+  if(chatLog.length && chatDirty) autoSaveChat();
 }
 
 function clearAll(){
@@ -629,14 +832,347 @@ function clearAll(){
       <div>OR TYPE A MESSAGE TO START MANUALLY</div>
       <div class="empty-tag">PROXYING OLLAMA // LOCALHOST:11434</div>
     </div>`;
-  convHistory=[]; chatLog=[]; endSession();
+  convHistory=[]; chatLog=[]; chatDirty=false;
+  document.getElementById('tokPillA').style.display='none';
+  document.getElementById('tokPillB').style.display='none';
+  endSession();
 }
 
 function onKey(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendUser();} }
 function resizeTA(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px'; }
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
+// ── Turn countdown ────────────────────────────────────────────────────────────
+function updateTurnPill(current, total){
+  const pill=document.getElementById('turnPill');
+  pill.style.display='flex';
+  document.getElementById('turnInfo').textContent=`TURN ${current} / ${total}`;
+}
+
+// ── Token count badge ─────────────────────────────────────────────────────────
+function showTokens(el, promptTokens, evalTokens, side){
+  if(!promptTokens && !evalTokens) return;
+  const badge=el.querySelector('.token-badge');
+  if(!badge) return;
+  badge.textContent=`↑ ${promptTokens} ctx · ↓ ${evalTokens} gen`;
+  badge.style.display='block';
+  // Update header pill
+  const pillId = side==='A'?'tokPillA':'tokPillB';
+  const infoId = side==='A'?'tokInfoA':'tokInfoB';
+  const pill=document.getElementById(pillId);
+  pill.style.display='flex';
+  document.getElementById(infoId).textContent=`${side}: ${promptTokens}↑ ${evalTokens}↓`;
+}
+
+// ── RAG log ───────────────────────────────────────────────────────────────────
+function toggleRagLog(){
+  const wrap=document.getElementById('ragLogWrap');
+  wrap.classList.toggle('open');
+  document.getElementById('btnRagLog').textContent=
+    wrap.classList.contains('open')?'◈ HIDE LOG':'◈ VIEW LOG';
+  if(wrap.classList.contains('open')) fetchRagLog();
+}
+
+async function fetchRagLog(){
+  try{
+    const r=await fetch(`${API}/api/rag/log`);
+    const d=await r.json();
+    renderRagLog(d.log||[]);
+  }catch(e){}
+}
+
+function renderRagLog(log){
+  const list=document.getElementById('ragLogList');
+  if(!log.length){ list.innerHTML='<div style="color:var(--dim);font-size:9px">No retrievals yet.</div>'; return; }
+  // Show newest first
+  const entries=[...log].reverse();
+  list.innerHTML=entries.map((entry,i)=>{
+    const chunksHtml=entry.chunks.map(c=>`
+      <div class="rag-log-chunk">
+        <div class="rag-log-chunk-src">◈ ${c.source}</div>
+        ${c.preview}…
+      </div>`).join('');
+    return `<div class="rag-log-entry">
+      <div class="rag-log-query">🔍 "${entry.query}"&nbsp;&nbsp;<span style="color:var(--dim)">${entry.time} · ${entry.chunks.length} chunks</span></div>
+      ${chunksHtml}
+    </div>`;
+  }).join('');
+}
+
+async function clearRagLog(){
+  try{
+    await fetch(`${API}/api/rag/log/clear`,{method:'POST'});
+    renderRagLog([]);
+  }catch(e){}
+}
+
+// Show RAG log button once RAG is loaded
+function updateRagUI(chunks,files){
+  document.getElementById('ragStatus').textContent=`${chunks} CHUNKS / ${files} FILES`;
+  document.getElementById('ragPill').style.display='flex';
+  document.getElementById('ragInfo').textContent=`RAG ${chunks} CHUNKS`;
+  document.getElementById('btnRag').classList.add('loaded');
+  document.getElementById('btnRagLog').style.display='inline-block';
+}
+
+// ── RAG chunk estimator ───────────────────────────────────────────────────────
+function updateEstimator(){
+  const chars  = parseInt(document.getElementById('ragEstChars').value)||0;
+  const cSize  = parseInt(document.getElementById('ragChunkSize').value)||500;
+  const overlap= parseInt(document.getElementById('ragOverlap').value)||50;
+  const topK   = parseInt(document.getElementById('ragTopK').value)||5;
+  if(!chars){ 
+    document.getElementById('estWords').textContent='—';
+    document.getElementById('estChunks').textContent='—';
+    document.getElementById('estRetrieved').textContent='—';
+    return;
+  }
+  // ~4.97 chars per average word (calibrated: 3845 chars = 773 words)
+  const estWords = Math.round(chars / 4.97);
+  // Chunks formula mirrors the server: i increments by (chunk_size - overlap) each step
+  const step = Math.max(cSize - overlap, 1);
+  const numChunks = estWords <= cSize ? 1 : Math.ceil((estWords - cSize) / step) + 1;
+  const retrieved = Math.min(topK, numChunks);
+  document.getElementById('estWords').textContent   = estWords.toLocaleString();
+  document.getElementById('estChunks').textContent  = numChunks;
+  document.getElementById('estRetrieved').textContent = `${retrieved} of ${numChunks}`;
+}
+
+// ── SIDEBAR & CHAT PERSISTENCE ───────────────────────────────────────────────
+
+let activeChatId = null;
+let sidebarCollapsed = false;
+
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  sidebarCollapsed = !sidebarCollapsed;
+  sb.classList.toggle('collapsed', sidebarCollapsed);
+  document.getElementById('sbToggleBtn').textContent = sidebarCollapsed ? '▶' : '◀';
+}
+
+async function loadChatList(){
+  try{
+    const r = await fetch(`${API}/api/chats/list`);
+    const d = await r.json();
+    renderChatList(d.chats||[], d.folders||[]);
+  }catch(e){ console.error('Chat list error', e); }
+}
+
+function renderChatList(chats, folders){
+  const list = document.getElementById('sbList');
+  const empty = document.getElementById('sbEmpty');
+  if(!chats.length){ empty.style.display='block'; list.innerHTML=''; list.appendChild(empty); return; }
+  empty.style.display='none';
+
+  // Group chats by folder
+  const byFolder = {'': []};
+  folders.forEach(f => byFolder[f] = []);
+  chats.forEach(c => {
+    const f = c.folder||'';
+    if(!byFolder[f]) byFolder[f]=[];
+    byFolder[f].push(c);
+  });
+
+  list.innerHTML='';
+
+  // Root chats first
+  (byFolder['']||[]).forEach(c => list.appendChild(makeChatItem(c)));
+
+  // Then folders
+  folders.forEach(folder => {
+    const folderEl = document.createElement('div');
+    folderEl.className='sb-folder';
+    folderEl.innerHTML=`<span class="sb-folder-arrow">▾</span><span>${folder}</span>`;
+    folderEl.onclick=()=>{
+      folderEl.classList.toggle('closed');
+      chatsEl.classList.toggle('closed');
+    };
+    list.appendChild(folderEl);
+    const chatsEl = document.createElement('div');
+    chatsEl.className='sb-folder-chats';
+    (byFolder[folder]||[]).forEach(c => chatsEl.appendChild(makeChatItem(c)));
+    list.appendChild(chatsEl);
+  });
+}
+
+function makeChatItem(chat){
+  const el = document.createElement('div');
+  el.className='sb-chat-item'+(chat.id===activeChatId?' active':'');
+  el.dataset.id=chat.id;
+  const modelLabel = [chat.modelA, chat.modelB].filter(Boolean)
+    .map(m=>m.split(':')[0].split('/').pop().substring(0,8)).join(' ↔ ');
+  el.innerHTML=`
+    <div class="sb-chat-info" onclick="loadChat('${chat.id}')">
+      <div class="sb-chat-name">${chat.title||chat.id}</div>
+      <div class="sb-chat-meta">${chat.date} · ${modelLabel}</div>
+    </div>
+    <div class="sb-chat-del" onclick="deleteChat(event,'${chat.id}')" title="Delete">✕</div>`;
+  // Right-click → move to folder
+  el.addEventListener('contextmenu', e=>{ e.preventDefault(); showMoveMenu(e, chat.id); });
+  return el;
+}
+
+async function loadChat(id){
+  try{
+    const r = await fetch(`${API}/api/chats/load/${id}`);
+    const d = await r.json();
+    if(d.error){ addSys(`[Error loading chat: ${d.error}]`); return; }
+
+    // Clear without triggering endSession/autoSave
+    document.getElementById('chat').innerHTML=`<div id="empty"><div class="empty-glyph">⬡</div></div>`;
+    convHistory=[]; chatLog=[]; chatDirty=false;
+    document.getElementById('tokPillA').style.display='none';
+    document.getElementById('tokPillB').style.display='none';
+
+    activeChatId = id;
+
+    // Replay log — finalizeMsg pushes to chatLog so we get a clean rebuild
+    d.log.forEach(entry => {
+      if(entry.type==='sys'){
+        addSys(entry.text);
+      } else {
+        const el = addMsg(entry.role, entry.model||'User', '', false);
+        const content = (entry.think ? `<think>${entry.think}</think>` : '') + (entry.text||'');
+        finalizeMsg(el, content, entry.model||'User', entry.role);
+      }
+    });
+
+    // Restore model selects
+    if(d.modelA){ const s=document.getElementById('modelA'); for(let o of s.options) if(o.value===d.modelA){s.value=d.modelA;break;} }
+    if(d.modelB){ const s=document.getElementById('modelB'); for(let o of s.options) if(o.value===d.modelB){s.value=d.modelB;break;} }
+
+    // Restore system prompts + params
+    const st = d.settings||{};
+    const setVal = (id, val) => { const el=document.getElementById(id); if(el && val!==undefined) el.value=val; };
+    setVal('sysA',  st.sysA);  setVal('sysB',  st.sysB);
+    setVal('tempA', st.tempA); setVal('tempB', st.tempB);
+    setVal('topPA', st.topPA); setVal('topPB', st.topPB);
+    setVal('topKA', st.topKA); setVal('topKB', st.topKB);
+    setVal('maxTA', st.maxTA); setVal('maxTB', st.maxTB);
+    setVal('repA',  st.repA);  setVal('repB',  st.repB);
+    setVal('ctxA',  st.ctxA);  setVal('ctxB',  st.ctxB);
+    // Restore RAG controls
+    setVal('ragPath',      st.ragPath);
+    setVal('ragChunkSize', st.ragChunkSize);
+    setVal('ragOverlap',   st.ragOverlap);
+    setVal('ragTopK',      st.ragTopK);
+    if(st.useRag !== undefined && st.useRag !== useRag){
+      useRag = st.useRag;
+      document.getElementById('ragToggle').className = 'toggle-sw' + (useRag?' on':'');
+    }
+
+    // Mark dirty=false — loaded chat, no new content yet
+    chatDirty = false;
+
+    // Mark active in sidebar
+    document.querySelectorAll('.sb-chat-item').forEach(el=>el.classList.toggle('active', el.dataset.id===id));
+    addSys(`◈ LOADED: ${d.title||id}`);
+
+  }catch(e){ console.error('Load chat error', e); }
+}
+
+async function deleteChat(e, id){
+  e.stopPropagation();
+  if(!confirm('Delete this chat?')) return;
+  try{
+    await fetch(`${API}/api/chats/delete/${id}`, {method:'DELETE'});
+    if(activeChatId===id){ clearAll(); activeChatId=null; }
+    loadChatList();
+  }catch(e){ console.error('Delete error', e); }
+}
+
+async function autoSaveChat(){
+  if(!chatLog.length || !chatDirty) return;
+  const mA = document.getElementById('modelA').value;
+  const mB = document.getElementById('modelB').value;
+  const now = new Date();
+  // Use existing activeChatId if continuing a loaded chat, else new ID
+  const id = activeChatId && chatDirty ? activeChatId : now.toISOString().replace(/[:.]/g,'-').substring(0,19);
+  const title = `${now.toLocaleDateString()} ${now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+  // Capture system prompts + params
+  const settings = {
+    sysA: document.getElementById('sysA').value,
+    sysB: document.getElementById('sysB').value,
+    tempA: document.getElementById('tempA').value,
+    topPA: document.getElementById('topPA').value,
+    topKA: document.getElementById('topKA').value,
+    maxTA: document.getElementById('maxTA').value,
+    repA:  document.getElementById('repA').value,
+    ctxA:  document.getElementById('ctxA').value,
+    tempB: document.getElementById('tempB').value,
+    topPB: document.getElementById('topPB').value,
+    topKB: document.getElementById('topKB').value,
+    maxTB: document.getElementById('maxTB').value,
+    repB:  document.getElementById('repB').value,
+    ctxB:  document.getElementById('ctxB').value,
+    ragPath:    document.getElementById('ragPath').value,
+    ragChunkSize: document.getElementById('ragChunkSize').value,
+    ragOverlap:   document.getElementById('ragOverlap').value,
+    ragTopK:      document.getElementById('ragTopK').value,
+    useRag: useRag,
+    ragLoaded: ragLoaded,
+  };
+  const payload = {
+    id, title,
+    date: now.toLocaleString(),
+    modelA: mA, modelB: mB,
+    folder: '',
+    settings,
+    log: chatLog
+  };
+  try{
+    await fetch(`${API}/api/chats/save`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    activeChatId = id;
+    chatDirty = false;
+    loadChatList();
+  }catch(e){ console.error('Auto-save error', e); }
+}
+
+async function createFolder(){
+  const name = prompt('Folder name:');
+  if(!name||!name.trim()) return;
+  try{
+    await fetch(`${API}/api/chats/folder`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:name.trim()})});
+    loadChatList();
+  }catch(e){}
+}
+
+function showMoveMenu(e, chatId){
+  document.querySelectorAll('.sb-move-menu').forEach(m=>m.remove());
+  fetch(`${API}/api/chats/list`).then(r=>r.json()).then(d=>{
+    const menu = document.createElement('div');
+    menu.className='sb-move-menu';
+    menu.style.left=e.clientX+'px'; menu.style.top=e.clientY+'px';
+    const opts = [['(root)', ''], ...(d.folders||[]).map(f=>[f,f])];
+    opts.forEach(([label, val])=>{
+      const opt = document.createElement('div');
+      opt.className='sb-move-opt'; opt.textContent='📁 '+label;
+      opt.onclick=()=>{ moveChat(chatId, val); menu.remove(); };
+      menu.appendChild(opt);
+    });
+    document.body.appendChild(menu);
+    setTimeout(()=>document.addEventListener('click', ()=>menu.remove(), {once:true}), 10);
+  });
+}
+
+async function moveChat(chatId, folder){
+  try{
+    await fetch(`${API}/api/chats/move`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:chatId, folder})});
+    loadChatList();
+  }catch(e){}
+}
+
+function newChat(){
+  if(chatDirty && chatLog.length && !confirm('Start a new chat? Current session will be saved.')) return;
+  if(chatDirty && chatLog.length) autoSaveChat();
+  activeChatId = null;
+  chatDirty = false;
+  clearAll();
+  document.querySelectorAll('.sb-chat-item').forEach(el=>el.classList.remove('active'));
+}
+
 init();
+loadChatList();
 </script>
 </body>
 </html>
