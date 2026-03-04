@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Echo // Multi-Mind v1.6</title>
+<title>Echo // Multi-Mind v1.7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -336,7 +336,7 @@ button:disabled{opacity:.35;cursor:not-allowed;}
 <!-- ── SIDEBAR ─────────────────────────────────────────────────────────── -->
 <div id="sidebar">
   <div class="sb-top">
-    <div class="sb-logo">ECHO // MULTI-MIND <span style="font-size:9px;opacity:.4;-webkit-text-fill-color:var(--dim)">v1.6</span></div>
+    <div class="sb-logo">ECHO // MULTI-MIND <span style="font-size:9px;opacity:.4;-webkit-text-fill-color:var(--dim)">v1.7</span></div>
     <button class="sb-new-btn" onclick="newChat()">＋ <span>New Chat</span></button>
     <div class="sb-toggle" id="sbToggle" onclick="toggleSidebar()">◀</div>
   </div>
@@ -659,6 +659,7 @@ button:disabled{opacity:.35;cursor:not-allowed;}
       </div>
       <div class="progress-bar" id="embedProgressBar" style="display:none"><div class="progress-fill" id="embedProgressFill" style="width:0%"></div></div>
       <div id="embedWarnRe" class="warn-banner" style="display:none">⚠ Chunk size or embedding model changed since last embed. Re-embed files to apply new settings.</div>
+      <div id="embedWarnCtx" class="warn-banner" style="display:none">⚠ Chunk size may exceed this model's context window (~512 tokens). Keep chunks ≤ 350 words for best results. Auto-truncation is active but smaller chunks give better retrieval.</div>
       <div class="rag-cfg-grid">
         <div class="rag-cfg-col">
           <div class="rag-cfg-label">Chunk Size (words)</div>
@@ -1286,7 +1287,7 @@ function updateTurnPill(cur,total){
 function saveChat(stripAwareness){
   if(!chatLog.length){ alert('Nothing to save yet!'); return; }
   const now=new Date().toISOString().replace(/[:.]/g,'-').substring(0,19);
-  let txt=`ECHO // MULTI-MIND v1.6${stripAwareness?' — Fine-Tuning Export':' — Chat Export'}\n`;
+  let txt=`ECHO // MULTI-MIND v1.7${stripAwareness?' — Fine-Tuning Export':' — Chat Export'}\n`;
   txt+=`Date: ${new Date().toLocaleString()}\n`;
   activeSlots.forEach(s=>txt+=`Slot ${s}: ${getSlotName(s)} (${getModel(s)})\n`);
   if(stripAwareness) txt+=`[AI awareness injection stripped from system prompts]\n`;
@@ -1373,6 +1374,8 @@ function checkEmbedWarn(){
   if(!warn) return;
   const changed=lastEmbedParams.model&&(curModel!==lastEmbedParams.model||curChunk!==lastEmbedParams.chunkSize);
   warn.style.display=changed?'block':'none';
+  const warnCtx=document.getElementById('embedWarnCtx');
+  if(warnCtx) warnCtx.style.display=curChunk>350?'block':'none';
 }
 
 // RAG mode is mutually exclusive — only one active at a time.
@@ -1567,6 +1570,9 @@ async function loadKnowledgeBase(id, type){
     ragLoaded=true;
     ragMode=d.type||type;
     updateRagUI(d.chunks, d.files||0, d.type);
+    // Auto-enable RAG and switch to the right tab so toggleRag() reads the correct active tab
+    switchRagTab(ragMode);
+    if(!useRag){ useRag=true; setRagMode(ragMode); }
     // Restore chunk size, overlap, model to UI
     if(d.type==='embedding'){
       if(d.chunk_size){ document.getElementById('embedChunkSize').value=d.chunk_size; }
