@@ -1,9 +1,11 @@
 """
-Echo // Multi-Mind v1.6
+Echo // Multi-Mind v1.7
 - Keyword RAG + Ollama Embedding RAG
 - Knowledge Base persistence (saved to echo_knowledge/)
 - Chat & folder persistence (echo_chats/)
-- Custom Model Profiles (echo_models.json)
+- Custom Model Profiles (echo_profiles/profiles.json)
+- Embedding: auto-truncates chunks that exceed model context window
+- KB load: filters empty-embedding chunks instead of blocking
 
 Install: pip install flask requests flask-cors
 Run:     python echo_server.py
@@ -13,6 +15,7 @@ import os
 import re
 import json
 import math
+import time
 import datetime
 import requests
 import threading
@@ -23,12 +26,24 @@ from flask_cors import CORS
 app = Flask(__name__, static_folder='echo_ui')
 CORS(app)
 
-OLLAMA_URL      = "http://localhost:11434"
-CHATS_DIR       = Path(__file__).parent / 'echo_chats'
-KNOWLEDGE_DIR   = Path(__file__).parent / 'echo_knowledge'
-MODELS_FILE     = Path(__file__).parent / 'echo_models.json'
+OLLAMA_URL    = "http://localhost:11434"
+CHATS_DIR     = Path(__file__).parent / 'echo_chats'
+KNOWLEDGE_DIR = Path(__file__).parent / 'echo_knowledge'
+PROFILES_DIR  = Path(__file__).parent / 'echo_profiles'
+MODELS_FILE   = PROFILES_DIR / 'profiles.json'
 CHATS_DIR.mkdir(exist_ok=True)
 KNOWLEDGE_DIR.mkdir(exist_ok=True)
+PROFILES_DIR.mkdir(exist_ok=True)
+
+# Migrate legacy echo_models.json → echo_profiles/profiles.json
+_legacy = Path(__file__).parent / 'echo_models.json'
+if _legacy.exists() and not MODELS_FILE.exists():
+    try:
+        MODELS_FILE.write_text(_legacy.read_text(encoding='utf-8'), encoding='utf-8')
+        _legacy.rename(_legacy.with_suffix('.json.bak'))
+        print("[PROFILES] Migrated echo_models.json → echo_profiles/profiles.json")
+    except Exception as _e:
+        print(f"[PROFILES] Migration warning: {_e}")
 
 # ─── RAG STATE ───────────────────────────────────────────────────────────────
 
@@ -133,9 +148,9 @@ def api_knowledge_list():
             data   = json.loads(f.read_text(encoding='utf-8'))
             chunks = data.get('chunks', [])
             kb_type = data.get('type', 'keyword')
-            # Flag KBs whose embeddings were never computed (saved with old broken code)
-            broken = (kb_type == 'embedding' and
-                      any(not c.get('embedding') for c in chunks[:5]))  # sample first 5
+            # Flag KB only when ALL embeddings are empty (fully broken)
+            broken = (kb_type == 'embedding' and len(chunks) > 0 and
+                      all(not c.get('embedding') for c in chunks[:10]))
             kbs.append({
                 'id':         f.stem,
                 'name':       data.get('name', f.stem),
@@ -164,11 +179,13 @@ def api_knowledge_save():
     chunks  = rag_embeddings if kb_type == 'embedding' else rag_chunks
     if not chunks:
         return jsonify({'error': 'No chunks loaded to save'}), 400
-    # Validate embeddings before saving — refuse to save broken KB
+    # Validate embeddings — block only if ALL are empty, warn on partial
     if kb_type == 'embedding':
         empty = sum(1 for c in chunks if not c.get('embedding'))
+        if empty == len(chunks):
+            return jsonify({'error': f'All {len(chunks)} chunks have empty embeddings. Re-embed your files before saving.'}), 400
         if empty:
-            return jsonify({'error': f'{empty}/{len(chunks)} chunks have empty embeddings. Re-embed your files before saving.'}), 400
+            print(f"[KB] Saving with {empty}/{len(chunks)} empty-embedding chunks — they will be skipped during retrieval")
     safe = re.sub(r'[^\w\-]', '_', name)
     kb = {
         'name':       name,
@@ -196,18 +213,23 @@ def api_knowledge_load(kb_id):
     kb_type = data.get('type', 'keyword')
     # Detect broken KB: embedding type but no actual vectors stored
     if kb_type == 'embedding':
-        empty = sum(1 for c in chunks if not c.get('embedding'))
-        if empty:
+        valid   = [c for c in chunks if c.get('embedding')]
+        invalid = len(chunks) - len(valid)
+        if not valid:
+            # Fully broken — return repair info so UI can show the REPAIR button
             return jsonify({
-                'error':   f'broken_embeddings',
-                'empty':   empty,
-                'total':   len(chunks),
-                'name':    data.get('name', kb_id),
-                'folder':  data.get('folder', ''),
-                'model':   data.get('model', ''),
+                'error':      'broken_embeddings',
+                'empty':      len(chunks),
+                'total':      len(chunks),
+                'name':       data.get('name', kb_id),
+                'folder':     data.get('folder', ''),
+                'model':      data.get('model', ''),
                 'chunk_size': data.get('chunk_size', 500),
                 'overlap':    data.get('overlap', 50),
             }), 400
+        if invalid:
+            print(f"[KB] Loaded '{kb_id}' — skipped {invalid} empty-embedding chunks, {len(valid)} valid")
+        chunks = valid
         rag_embeddings = chunks
         rag_chunks     = []
     else:
@@ -327,27 +349,51 @@ def cosine_sim(a, b):
     return dot / (na * nb) if na and nb else 0.0
 
 def get_embedding(text, model):
-    """Try new Ollama /api/embed (v0.5+) first, fall back to legacy /api/embeddings."""
-    # New API: POST /api/embed  { model, input }  → { embeddings: [[...]] }
-    try:
-        r = requests.post(f"{OLLAMA_URL}/api/embed",
-                          json={"model": model, "input": text}, timeout=60)
-        if r.ok:
-            data = r.json()
-            embs = data.get('embeddings', [])
-            if embs and isinstance(embs[0], list) and embs[0]:
-                return embs[0]
-    except Exception:
-        pass
-    # Legacy API: POST /api/embeddings  { model, prompt }  → { embedding: [...] }
-    try:
-        r = requests.post(f"{OLLAMA_URL}/api/embeddings",
-                          json={"model": model, "prompt": text}, timeout=60)
-        emb = r.json().get('embedding', [])
-        if emb:
-            return emb
-    except Exception:
-        pass
+    """Try new Ollama /api/embed first, fall back to legacy /api/embeddings.
+    Automatically halves the text when Ollama returns a context-length error."""
+    current     = text
+    trunc_count = 0
+
+    while current:  # loop to retry with shorter text on context errors
+        got_context_error = False
+
+        # New API: POST /api/embed  { model, input }  → { embeddings: [[...]] }
+        try:
+            r = requests.post(f"{OLLAMA_URL}/api/embed",
+                              json={"model": model, "input": current}, timeout=120)
+            if r.ok:
+                embs = r.json().get('embeddings', [])
+                if embs and isinstance(embs[0], list) and embs[0]:
+                    return embs[0]
+            elif ('context' in r.text.lower() or 'length' in r.text.lower()):
+                got_context_error = True
+        except Exception:
+            pass
+
+        if not got_context_error:
+            # Legacy API: POST /api/embeddings  { model, prompt }  → { embedding: [...] }
+            try:
+                r = requests.post(f"{OLLAMA_URL}/api/embeddings",
+                                  json={"model": model, "prompt": current}, timeout=120)
+                if r.ok:
+                    emb = r.json().get('embedding', [])
+                    if emb:
+                        return emb
+                elif ('context' in r.text.lower() or 'length' in r.text.lower()):
+                    got_context_error = True
+            except Exception:
+                pass
+
+        if got_context_error:
+            trunc_count += 1
+            new_len = len(current) // 2
+            if new_len < 1:
+                break
+            print(f"[EMBED] Context too long ({len(current)} chars) — truncating to {new_len} (trunc #{trunc_count})")
+            current = current[:new_len]
+        else:
+            break  # non-context failure, no point truncating
+
     print(f"[EMBED] WARNING: get_embedding returned empty for model '{model}' — check model name and Ollama version")
     return []
 
@@ -380,21 +426,20 @@ def embed_files_background(folder_path, chunk_size, overlap, embed_model):
     print(f"[EMBED] Done — {len(rag_embeddings)} embeddings")
 
 def retrieve_embedding(query, embed_model, top_k=5):
-    if not rag_embeddings:
-        print("[EMBED RETRIEVE] No embeddings in memory — did embedding finish?")
+    valid_chunks = [c for c in rag_embeddings if c.get('embedding')]
+    if not valid_chunks:
+        print("[EMBED RETRIEVE] No valid embeddings in memory — did embedding finish?")
         return []
     q_emb = get_embedding(query, embed_model)
     if not q_emb:
         print(f"[EMBED RETRIEVE] Empty query embedding — model '{embed_model}' unreachable or wrong name")
         return []
-    scored = sorted([(cosine_sim(q_emb, c['embedding']), c) for c in rag_embeddings],
+    scored = sorted([(cosine_sim(q_emb, c['embedding']), c) for c in valid_chunks],
                     key=lambda x: x[0], reverse=True)
     top_scores = [round(s, 4) for s, _ in scored[:min(3, len(scored))]]
     print(f"[EMBED RETRIEVE] Top-{top_k} cosine scores: {top_scores}")
-    # Use a small positive threshold to filter near-zero noise
     results = [c for score, c in scored[:top_k] if score > 0.01]
     if not results and scored:
-        # All scores near-zero usually means the query embedding was empty/mismatched
         print(f"[EMBED RETRIEVE] All scores ≤ 0.01 — embedding mismatch suspected")
     return results
 
@@ -568,11 +613,12 @@ def serve_static(path):
 
 if __name__ == '__main__':
     print("═" * 58)
-    print("  ECHO // MULTI-MIND  v1.6")
+    print("  ECHO // MULTI-MIND  v1.7")
     print("═" * 58)
     print(f"  UI:        http://localhost:8080")
     print(f"  Ollama:    {OLLAMA_URL}")
     print(f"  Chats:     {CHATS_DIR}")
     print(f"  Knowledge: {KNOWLEDGE_DIR}")
+    print(f"  Profiles:  {PROFILES_DIR}")
     print("═" * 58)
     app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)
