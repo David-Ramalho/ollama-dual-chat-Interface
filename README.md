@@ -49,6 +49,7 @@ Everything runs locally. No API keys. No data sent anywhere except to your own O
 - [API Reference](#api-reference)
 - [Usage Guide](#usage-guide)
 - [FAQ](#faq)
+- [Changelog](#changelog)
 
 ---
 
@@ -105,9 +106,13 @@ The Flask server has five jobs:
 | **AI Awareness Injection** | Optionally prepend identity text to each slot's system prompt; Standard mode (auto-generated) or Custom mode (your own template with `{name}` and `{others}` placeholders) |
 | **Keyword RAG** | Load a folder of `.txt` files; keyword-overlap retrieval with `√` normalisation — no dependencies |
 | **Embedding RAG** | Semantic retrieval via Ollama embedding models (cosine similarity); supports both new `/api/embed` and legacy `/api/embeddings` Ollama APIs automatically |
+| **Auto-Truncation** | Chunks that exceed the embedding model's context window are automatically halved and retried — embedding never silently fails due to input length |
+| **Chunk Size Warning** | UI warns when chunk size exceeds 350 words, the safe limit for small embedding models with 512-token context windows |
 | **RAG Template** | Fully customisable injection template — write any text around `{context}` to control how retrieved chunks are presented to the model |
 | **Knowledge Base Persistence** | Save chunked + embedded knowledge to disk; load instantly in any future session with settings restored (chunk size, overlap, model all restored automatically) |
-| **Broken KB Detection** | Detects knowledge bases saved with empty embeddings (from older versions); shows ⚠ BROKEN badge with one-click repair that pre-fills all settings |
+| **Graceful Partial KB Load** | KBs with a small number of failed chunks load successfully — empty-embedding chunks are silently skipped during retrieval rather than blocking the whole load |
+| **Broken KB Detection** | Detects knowledge bases where all embeddings are empty; shows ⚠ BROKEN badge with one-click repair that pre-fills all settings |
+| **Auto-Enable RAG on Load** | Loading a knowledge base automatically activates the correct RAG mode — no extra toggle click needed |
 | **RAG Chunk Controls** | Chunk size, overlap, and retrieve top-K all configurable from the UI without restarting |
 | **RAG Chunk Estimator** | Enter a file character count; UI instantly shows estimated words, chunks produced, and chunks retrieved |
 | **Embedding Progress** | Live progress bar showing chunks embedded / total during background embedding |
@@ -116,7 +121,7 @@ The Flask server has five jobs:
 | **Embed Model Unload** | Dedicated ⏏ button to evict the embedding model from VRAM via the correct Ollama endpoint |
 | **Token Counters** | Per-message `↑ ctx · ↓ gen` badge + persistent header pills showing prompt tokens in and response tokens out |
 | **Context Length Control** | Set `num_ctx` per model — controls the KV cache / context window Ollama allocates |
-| **Custom Model Profiles** | Save a model + system prompt + all parameters as a named profile; apply to any slot in one click |
+| **Custom Model Profiles** | Save a model + system prompt + all parameters as a named profile; apply to any slot in one click; stored in `echo_profiles/` folder |
 | **Chat Sidebar** | Collapsible left panel listing all saved chats; updates instantly when a session ends — no page refresh needed |
 | **Chat Auto-Save** | Every session saves automatically to `echo_chats/` as JSON the moment generation completes |
 | **Chat Folders** | Create named folders; right-click any chat to move it |
@@ -147,10 +152,12 @@ pip install flask requests flask-cors
 For embedding RAG, pull a dedicated embedding model (optional but faster than using a chat model):
 
 ```bash
-ollama pull znbang/bge:small-en-v1.5-q8_0   # fast, small
+ollama pull znbang/bge:small-en-v1.5-q8_0   # fast, small (512-token context — keep chunks ≤ 350 words)
 ollama pull nomic-embed-text                  # popular general-purpose
 ollama pull mxbai-embed-large                 # higher quality
 ```
+
+> **Note on chunk size:** Small embedding models like `bge-small` have a 512-token context window (~350 words). Echo will auto-truncate chunks that exceed this limit, but smaller chunks give cleaner semantic retrieval. The UI shows a warning banner when your chunk size setting exceeds 350 words.
 
 Ollama installation: https://ollama.com
 
@@ -181,12 +188,13 @@ The terminal will show:
 
 ```
 ══════════════════════════════════════════════════════════
-  ECHO // MULTI-MIND  v1.6
+  ECHO // MULTI-MIND  v1.7
 ══════════════════════════════════════════════════════════
   UI:        http://localhost:8080
   Ollama:    http://localhost:11434
   Chats:     ./echo_chats/
   Knowledge: ./echo_knowledge/
+  Profiles:  ./echo_profiles/
 ══════════════════════════════════════════════════════════
 ```
 
@@ -203,10 +211,13 @@ echo-multi-mind/
 │       └── 2026-03-02T...json
 ├── echo_knowledge/       ← Auto-created; stores saved knowledge bases as JSON
 │   └── my_notes.json
-├── echo_models.json      ← Auto-created; stores custom model profiles
+├── echo_profiles/        ← Auto-created; stores custom model profiles
+│   └── profiles.json
 └── echo_ui/
     └── index.html        ← Complete frontend (HTML + CSS + JS, single file)
 ```
+
+> **Upgrading from v1.6:** The old `echo_models.json` file is automatically migrated to `echo_profiles/profiles.json` on first run. The original is renamed to `echo_models.json.bak` as a safety backup.
 
 ---
 
@@ -269,19 +280,15 @@ Semantic retrieval via Ollama embedding models and cosine similarity. Embedding 
 ```python
 def get_embedding(text, model):
     # New API: POST /api/embed  { model, input }  → { embeddings: [[...]] }
-    try:
-        r = requests.post(f"{OLLAMA_URL}/api/embed",
-                          json={"model": model, "input": text}, timeout=60)
-        if r.ok:
-            embs = r.json().get('embeddings', [])
-            if embs and embs[0]:
-                return embs[0]
-    except Exception:
-        pass
-    # Legacy API: POST /api/embeddings  { model, prompt }  → { embedding: [...] }
-    r = requests.post(f"{OLLAMA_URL}/api/embeddings",
-                      json={"model": model, "prompt": text}, timeout=60)
-    return r.json().get('embedding', [])
+    # Legacy:  POST /api/embeddings  { model, prompt }  → { embedding: [...] }
+    # Auto-truncates on context-length errors by halving the text and retrying
+```
+
+**Auto-truncation** — if a chunk is too long for the embedding model's context window, `get_embedding()` detects the error response and automatically halves the text, retrying until it fits. This means embedding never silently fails due to input length, even with large chunk sizes or models that have small context windows.
+
+```
+[EMBED] Context too long (3200 chars) — truncating to 1600 (trunc #1)
+[EMBED] OK after 1 truncation(s) — 1600 chars
 ```
 
 **Cosine similarity retrieval:**
@@ -312,18 +319,22 @@ Scores below `0.01` are discarded as near-zero noise. The server logs top scores
 
 After embedding files you can save the result as a named knowledge base. The JSON file stores the text chunks, their computed embedding vectors, and all settings used to produce them.
 
-**Save** — refuses to save if any embedding vectors are empty (prevents silently saving a broken KB):
+**Save** — blocks only if every chunk has an empty embedding (fully broken). A small number of failed chunks is allowed and those chunks are noted in the server log:
 
 ```python
 if kb_type == 'embedding':
     empty = sum(1 for c in chunks if not c.get('embedding'))
+    if empty == len(chunks):
+        return jsonify({'error': 'All chunks have empty embeddings...'}), 400
     if empty:
-        return jsonify({'error': f'{empty}/{len(chunks)} chunks have empty embeddings.'}), 400
+        print(f"[KB] Saving with {empty}/{len(chunks)} empty chunks — skipped at retrieval")
 ```
 
-**Load** — restores `chunk_size`, `overlap`, and `embed_model` back to the UI fields automatically, so the displayed settings always match what is actually in memory. Also restores the source folder path so repair is one click.
+**Load** — restores `chunk_size`, `overlap`, and `embed_model` back to the UI fields automatically. Chunks with empty embeddings are filtered out silently rather than blocking the load. The KB is immediately activated (RAG toggled on automatically) so the first message benefits from context without any extra clicks.
 
-**Broken KB detection** — if a KB was saved before the embedding API fix (v1.3), all its embedding vectors will be empty `[]`. These are flagged with a ⚠ BROKEN badge in the Knowledge Base tab. Clicking **⟳ REPAIR** pre-fills the Embedding tab with the original folder, chunk size, overlap, and model — click EMBED FILES then SAVE AS KNOWLEDGE BASE with the same name to overwrite.
+**Broken KB detection** — a KB is flagged ⚠ BROKEN only when **all** of its embedding vectors are empty `[]`. Clicking **⟳ REPAIR** pre-fills the Embedding tab with the original folder, chunk size, overlap, and model — click EMBED FILES then SAVE AS KNOWLEDGE BASE with the same name to overwrite.
+
+**Partial KBs** — KBs where only some chunks failed (e.g. due to transient Ollama timeouts) load normally. The valid chunks are used for retrieval; the failed ones are silently skipped. These KBs are not flagged as broken.
 
 ---
 
@@ -382,8 +393,6 @@ You are Echo1, debating with {others}.
 You are {name}, debating with Echo2.
 You are Echo1, debating with Echo2.
 ```
-
-The display name used in injection — and in chat bubbles and exports — is whatever you type in the **Display Name** field in Settings for that slot. If left blank it falls back to the base model name. The display name has no effect on the model itself; the model only knows its name if the injection or system prompt tells it.
 
 Awareness state (on/off, mode, custom text) is saved with the chat and restored on load.
 
@@ -546,7 +555,8 @@ function buildMsgsN(history, slotIndex, allSlots, sysPrompt) {
 | Flask port | `8080` | Set in `app.run(port=8080)` |
 | `CHATS_DIR` | `./echo_chats/` | Chat save directory |
 | `KNOWLEDGE_DIR` | `./echo_knowledge/` | Knowledge base directory |
-| `MODELS_FILE` | `./echo_models.json` | Custom model profiles |
+| `PROFILES_DIR` | `./echo_profiles/` | Custom model profiles directory |
+| `MODELS_FILE` | `./echo_profiles/profiles.json` | Custom model profiles file |
 
 **UI per-slot parameters** (saved with each chat):
 
@@ -563,7 +573,7 @@ function buildMsgsN(history, slotIndex, allSlots, sysPrompt) {
 
 | Parameter | Default | Effect |
 |---|---|---|
-| Chunk Size | 500 words | Words per chunk |
+| Chunk Size | 500 words | Words per chunk. Keep ≤ 350 for small embed models (bge-small, etc.) |
 | Overlap | 50 words | Shared words between adjacent chunks |
 | Retrieve Top-K | 5 | Chunks injected per query |
 | RAG Template | `### Memory Context:\n{context}` | Injection wrapper sent to model |
@@ -582,7 +592,7 @@ All routes served on port `8080`.
 | POST | `/api/rag/load` | Load `.txt` files for keyword RAG |
 | GET | `/api/rag/status` | RAG index status (chunks, embed_chunks, embed_valid) |
 | POST | `/api/rag/embed_load` | Start background embedding of a folder |
-| GET | `/api/rag/embed_status` | Embedding progress (done/total/running) |
+| GET | `/api/rag/embed_status` | Embedding progress (done/total/running/error) |
 | POST | `/api/rag/embed_unload` | Unload embedding model from VRAM |
 | GET | `/api/rag/log` | Retrieval log (last 100 queries, with mode field) |
 | POST | `/api/rag/log/clear` | Clear retrieval log |
@@ -652,7 +662,7 @@ Every response bubble shows `↑ ctx · ↓ gen` after it finishes. Watch `↑ c
 
 1. Open **◈ RAG** → **Ollama Embeddings** tab.
 2. Enter the folder path and select an **Embedding Model** (⭐ models are dedicated embed models).
-3. Set chunk size and overlap.
+3. Set chunk size and overlap. If the orange warning banner appears, your chunk size exceeds 350 words — safe for models with large context windows, but small models like `bge-small` work better at ≤ 350. Auto-truncation handles the rest either way.
 4. Click **EMBED FILES** — a progress bar shows embedding progress.
 5. Toggle **USE RAG** on.
 6. Optionally click **SAVE AS KNOWLEDGE BASE** to persist to disk.
@@ -660,8 +670,8 @@ Every response bubble shows `↑ ctx · ↓ gen` after it finishes. Watch `↑ c
 ### Knowledge Bases
 
 1. After embedding, type a name and click **SAVE AS KNOWLEDGE BASE**.
-2. In future sessions, open **◈ RAG** → **Knowledge Base** tab and click **LOAD** — chunk size, overlap, and model are all restored automatically.
-3. KBs with broken embeddings (⚠ BROKEN) show a **⟳ REPAIR** button that pre-fills the Embedding tab for one-click re-embedding.
+2. In future sessions, open **◈ RAG** → **Knowledge Base** tab and click **LOAD** — chunk size, overlap, and model are all restored automatically, and RAG is enabled immediately.
+3. KBs with all-broken embeddings (⚠ BROKEN) show a **⟳ REPAIR** button that pre-fills the Embedding tab for one-click re-embedding.
 
 ### Custom RAG Template
 
@@ -677,7 +687,7 @@ Use the **⏏** button next to each slot's model dropdown to unload that model f
 
 ### Model Profiles
 
-Open **MY MODELS** in the sidebar bottom. Create a profile with a name, avatar, base model, system prompt, and all parameters. Click any profile to apply it to a slot.
+Open **MY MODELS** in the sidebar bottom. Create a profile with a name, avatar, base model, system prompt, and all parameters. Click any profile to apply it to a slot. Profiles are stored in `echo_profiles/profiles.json`.
 
 ### Export
 
@@ -695,7 +705,16 @@ Open **MY MODELS** in the sidebar bottom. Create a profile with a name, avatar, 
 Check the Retrieval Log to confirm chunks were actually injected. For keyword mode, the scorer only matches exact words — try more specific terms or increase chunk size. For embedding mode, check the server terminal for score output; very low scores mean the query embedding is mismatched with the stored embeddings (usually a model mismatch — re-embed with the same model you query with).
 
 **Q: Embedding scores are all 0.0.**
-This usually means the embedding model name doesn't match what was used during embedding, or the KB was saved before the Ollama API fix (v1.3). In that case the KB will show ⚠ BROKEN — use the Repair flow.
+This usually means the embedding model used at query time doesn't match the model used during embedding. Re-embed with the correct model, or load a KB that was saved with the same model currently selected.
+
+**Q: I see "[EMBED] Context too long" messages in the server log.**
+This is normal and handled automatically. It means one or more chunks exceeded the model's context window. Echo halves the text and retries until it fits. For cleaner results with no truncation, set chunk size to ≤ 350 words when using small embedding models like `bge-small`.
+
+**Q: My knowledge base shows ⚠ BROKEN.**
+All embedding vectors in this KB are empty — it was likely saved before the embedding fix. Click **⟳ REPAIR**, which pre-fills the Embedding tab with the original settings. Re-embed and save with the same name to overwrite.
+
+**Q: I saved a KB but it won't load (400 error in server log).**
+A 400 on load means every single chunk has an empty embedding — a fully broken KB. Use the REPAIR flow. If only some chunks are empty, the KB loads fine and the empty ones are silently skipped.
 
 **Q: The model seems confused about its identity / who it's talking to.**
 Awareness injection only provides the name. Add a **System Prompt** for that slot with behavioral instructions (e.g. `You are Echo1. Debate thoughtfully with Echo2. Respond only for yourself.`). Without a system prompt, thinking models will spend their reasoning budget trying to invent their own purpose.
@@ -713,7 +732,10 @@ The header shows `OLLAMA OFFLINE`. Model dropdowns show "Cannot reach server". T
 Yes — `app.run(host='0.0.0.0', port=8080)` is the default. Access via `http://your-server-ip:8080`. For internet exposure use nginx or ngrok with authentication.
 
 **Q: Where are my files stored?**
-All files are stored next to `echo_server.py`: `echo_chats/` for conversation history, `echo_knowledge/` for knowledge bases, `echo_models.json` for model profiles. No data leaves your machine.
+All files are stored next to `echo_server.py`: `echo_chats/` for conversation history, `echo_knowledge/` for knowledge bases, `echo_profiles/` for model profiles. No data leaves your machine.
+
+**Q: I was using v1.6 — where did echo_models.json go?**
+It was automatically migrated to `echo_profiles/profiles.json` on first run. A backup copy was saved as `echo_models.json.bak` in the same directory.
 
 ---
 
@@ -721,6 +743,7 @@ All files are stored next to `echo_server.py`: `echo_chats/` for conversation hi
 
 | Version | Changes |
 |---|---|
+| **v1.7** | **Embedding auto-truncation** — chunks exceeding the model's context window are automatically halved and retried instead of failing silently. **Profiles folder** — custom model profiles moved to `echo_profiles/profiles.json`; `echo_models.json` auto-migrated on first run. **Graceful KB load** — KBs with a minority of empty-embedding chunks load successfully, filtering out bad chunks rather than returning a 400 error. **Broken KB detection** updated to flag only fully-broken KBs (all embeddings empty). **Auto-enable RAG** on KB load — no extra toggle click needed. **Chunk size warning** — UI banner warns when chunk size exceeds 350 words (the safe limit for 512-token embed models). |
 | **v1.6** | Sidebar auto-updates instantly when a session ends — no page refresh needed. Full async save chain. |
 | **v1.5** | Fixed missing `@app.route` decorator for `/api/rag/status` (was 404). Broken KB detection with ⚠ badge and ⟳ REPAIR button. Source folder saved with KB for repair pre-fill. Save blocked for empty embeddings. |
 | **v1.4** | Loading a KB now restores chunk size, overlap, and embedding model to UI fields. Server returns `chunk_size`/`overlap` in knowledge load response. |
