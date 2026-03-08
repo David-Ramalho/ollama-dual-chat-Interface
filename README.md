@@ -1,4 +1,4 @@
-# ECHO // MULTI-MIND
+# ECHO // MULTI-MIND  `v0.85`
 
 > A local, privacy-first interface for multi-model AI conversations — powered by Ollama and a lightweight Flask proxy with dual RAG engines (keyword + semantic embeddings), persistent knowledge bases, custom awareness injection, real-time token monitoring, Multi-AI System presets, and full flow control (skip, pause, inject, resume).
 
@@ -205,7 +205,7 @@ The terminal will show:
 
 ```
 ══════════════════════════════════════════════════════════
-  ECHO // MULTI-MIND  v1.8
+  ECHO // MULTI-MIND  v0.85
 ══════════════════════════════════════════════════════════
   UI:        http://localhost:8080
   Ollama:    http://localhost:11434
@@ -237,9 +237,11 @@ echo-multi-mind/
     └── index.html        ← Complete frontend (HTML + CSS + JS, single file)
 ```
 
-> **Upgrading from v1.7:** Drop in the new `echo_server.py` and `index.html`. The new `echo_systems/` directory is created automatically on first run. All existing chats, knowledge bases, and profiles are fully compatible.
+> **Upgrading from v0.80:** Drop in the new `echo_server.py` and `index.html`. No migrations needed — all existing chats, knowledge bases, profiles, and systems are fully compatible.
 
-> **Upgrading from v1.6:** The old `echo_models.json` file is automatically migrated to `echo_profiles/profiles.json` on first run. The original is renamed to `echo_models.json.bak` as a safety backup.
+> **Upgrading from v0.70:** Drop in the new `echo_server.py` and `index.html`. The new `echo_systems/` directory is created automatically on first run. All existing chats, knowledge bases, and profiles are fully compatible.
+
+> **Upgrading from v0.60:** The old `echo_models.json` file is automatically migrated to `echo_profiles/profiles.json` on first run. The original is renamed to `echo_models.json.bak` as a safety backup.
 
 ---
 
@@ -249,13 +251,19 @@ echo-multi-mind/
 
 The server is a single-file Flask application with no database, no ORM, no task queue. All state is held in memory at the process level, except for chats, knowledge bases, profiles, and systems which are written to disk as JSON.
 
-`flask-cors` adds `Access-Control-Allow-Origin: *` to every response. For streaming responses, Flask uses Python generators to forward chunks as they arrive without buffering:
+`flask-cors` adds `Access-Control-Allow-Origin: *` to every response. Streaming responses use a dedicated generator function that closes the upstream connection on client disconnect — this lets Ollama stop generating immediately when the user clicks Stop, freeing VRAM for the next request within milliseconds rather than waiting for the full response to complete:
 
 ```python
-def generate():
-    for chunk in r.iter_content(chunk_size=None):
-        yield chunk
-return Response(generate(), content_type='application/x-ndjson')
+def _stream_response(upstream_response):
+    try:
+        for chunk in upstream_response.iter_content(chunk_size=None):
+            yield chunk
+    except Exception:
+        pass          # client disconnected — that's fine
+    finally:
+        upstream_response.close()   # signal Ollama to stop generating
+
+return Response(_stream_response(r), content_type='application/x-ndjson')
 ```
 
 ---
@@ -400,7 +408,7 @@ Chats are saved as JSON files in `echo_chats/` next to `echo_server.py`. The sid
 
 **Auto-save logic** uses a `chatDirty` flag that becomes `true` only when new messages are generated, preventing re-saves of chats loaded from disk.
 
-**Chat Duplication (v1.8)** — right-click any chat in the sidebar and choose **📋 Duplicate**. This performs a true deep copy via `POST /api/chats/duplicate/<id>`: the full JSON is cloned (all settings, system prompts, inference parameters, awareness state, RAG settings, and the complete message log) and saved with a new timestamped ID and a `(copy)` suffix on the title. The original is completely unaffected.
+**Chat Duplication** — right-click any chat in the sidebar and choose **📋 Duplicate**. This performs a true deep copy via `POST /api/chats/duplicate/<id>`: the full JSON is cloned (all settings, system prompts, inference parameters, awareness state, RAG settings, and the complete message log) and saved with a new timestamped ID and a `(copy)` suffix on the title. The original is completely unaffected.
 
 Each saved file contains:
 
@@ -433,7 +441,7 @@ Each saved file contains:
 
 **Loading a System** applies all slot settings in one click: the correct slots are activated, display names are set, system prompts are filled in, parameters are applied, awareness is toggled, and the turns counter is set. Your previous slot configuration is replaced.
 
-**Built-in templates** ship with v1.8 and are read-only but forkable:
+**Built-in templates** ship with the project and are read-only but forkable:
 
 | System | Participants | Description |
 |---|---|---|
@@ -457,7 +465,7 @@ The entire UI is a self-contained HTML file with inline `<style>` and `<script>`
 
 **Layout** — a flex row: a collapsible `#sidebar` (255px) on the left and the main `#app` taking the rest. The sidebar collapses to a 44px strip.
 
-**Key state variables (v1.8):**
+**Key state variables:**
 
 ```js
 let running         = false;   // generation in progress
@@ -515,7 +523,7 @@ if (j.done) {
 All four controls are available during any running turn (AUTO or manual Send):
 
 **■ STOP (Global)**
-Sets `stop=true`, aborts the active stream via `AbortController`, and resolves the pause Promise if the session is currently paused. The loop checks `stop` before every slot, so the entire remaining sequence is cancelled — not just the current model. This is a fix from v1.7, where stop only cancelled the active stream and could allow subsequent models to begin.
+Sets `stop=true`, aborts the active stream via `AbortController`, and resolves the pause Promise if the session is currently paused. The loop checks `stop` before every slot, so the entire remaining sequence is cancelled — not just the current model.
 
 ```js
 async function stopAll() {
@@ -564,7 +572,7 @@ Two sources are supported: a native `message.thinking` JSON field (used by LFM2.
 
 Ollama expects roles `system`, `user`, `assistant`. In a multi-slot conversation each model needs to see its own prior turns as `assistant` and all other slots' turns as `user`.
 
-**v1.8 fix:** `buildMsgsN()` now uses the **`slot` field stored on each history entry** rather than a positional `aiTurn` counter. The old counter-based approach broke whenever a turn was cut short by stop or skip, or when slots changed between sessions — causing role assignments to drift and corrupt context across long conversations.
+**`buildMsgsN()` uses the `slot` field stored on each history entry** rather than a positional `aiTurn` counter. The old counter-based approach broke whenever a turn was cut short by stop or skip, or when slots changed between sessions — causing role assignments to drift and corrupt context across long conversations.
 
 ```js
 function buildMsgsN(history, slotIndex, allSlots, sysPrompt) {
@@ -767,7 +775,7 @@ Click any chat in the left sidebar to reload it. All settings are restored. Righ
 `↑ ctx` is the total tokens sent into the model — system prompt + awareness injection + conversation history + RAG chunks. `↓ gen` is the tokens the model generated. Compare `↑ ctx` against your Context Length setting to track remaining budget.
 
 **Q: Does STOP cancel all models or just the current one?**
-In v1.8, **STOP cancels the entire turn** — the active stream is aborted and the loop exits before any further models run. If you only want to cancel the current model and continue to the next one, use **⏭ SKIP** instead.
+**STOP cancels the entire turn** — the active stream is aborted and the loop exits before any further models run. If you only want to cancel the current model and continue to the next one, use **⏭ SKIP** instead.
 
 **Q: How does PAUSE differ from STOP?**
 PAUSE suspends the turn at the current position without discarding it. You can inject a message and then resume exactly where you left off. STOP permanently ends the turn and triggers auto-save.
@@ -785,10 +793,19 @@ Slot assignments (A/B/C/D), display names, system prompts, all six inference par
 Built-ins are read-only in the UI but click **⊕ FORK** to copy one into your own editable System. The fork is immediately saved and editable.
 
 **Q: Why did context tokens drop between turns?**
-This was a role-mapping bug in v1.7 and earlier. `buildMsgsN()` used a positional counter (`aiTurn % slots`) to assign `assistant`/`user` roles, which drifted whenever a turn was cut short. v1.8 fixes this by storing the originating `slot` field on each history entry and using that directly for role assignment.
+This was a role-mapping bug in v0.70 and earlier. `buildMsgsN()` used a positional counter (`aiTurn % slots`) to assign `assistant`/`user` roles, which drifted whenever a turn was cut short. It was fixed by storing the originating `slot` field on each history entry and using that directly for role assignment.
 
 **Q: The keyword RAG log button wasn't working.**
-Fixed in v1.8. The `toggleRagLog()` function was referenced in the HTML but was never defined — only its embedding-mode counterpart existed. Both log toggles now work independently.
+Fixed in v0.80. The `toggleRagLog()` function was referenced in the HTML but was never defined — only its embedding-mode counterpart existed. Both log toggles now work independently.
+
+**Q: After clicking STOP, new requests return 503 for ~30 seconds.**
+Fixed in v0.85. The streaming proxy now uses a `try/finally` generator that calls `upstream_response.close()` when the client disconnects. This sends a RST to Ollama so it can stop generating immediately and free VRAM, rather than running the response to completion in the background.
+
+**Q: CLEAR restores the chat after a page refresh.**
+Fixed in v0.85. The ✕ CLEAR button now deletes the server-side JSON file before wiping the UI, so there is nothing to restore on reload. The sidebar also updates instantly to reflect the deletion.
+
+**Q: New chats or deletions only appear in the sidebar after a page refresh.**
+Fixed in v0.85. `autoSaveChat()` now always calls `loadChatList()` after saving (even on error), and `newChat()` properly awaits the save before resetting state. Sidebar is now always in sync.
 
 **Q: The model ignores the RAG context.**
 Check the Retrieval Log to confirm chunks were actually injected. For keyword mode, the scorer only matches exact words. For embedding mode, check the server terminal for score output; very low scores usually mean a model mismatch — re-embed with the same model you query with.
@@ -811,14 +828,15 @@ All files are stored next to `echo_server.py`: `echo_chats/` for conversations, 
 
 | Version | Changes |
 |---|---|
-| **v1.8** | **Global Stop fix** — STOP now terminates the entire turn (all remaining models), not just the active stream. **Skip** — new ⏭ SKIP button aborts the current model only and advances to the next slot. **Pause / Inject / Resume** — new ⏸ PAUSE freezes the turn mid-sequence; user can inject a message (INJECT & RESUME) or simply resume without injecting. **Chat Duplication** — right-click any saved chat to deep-copy it including all settings, prompts, parameters, and history. **Multi-AI Systems Presets** — new ⬡ SYSTEMS panel with save/load/edit/fork/delete; two built-in expert-tuned templates: Trialogue (Teacher↔Student↔Mediator) and Devil's Advocate Debate (Proposer↔Challenger↔Judge). **Context role-mapping fix** — `buildMsgsN()` now uses the stored `slot` field on each history entry instead of a positional counter, fixing context drift after stops, skips, or slot changes. **RAG log fix** — `toggleRagLog()` was referenced but never defined; keyword retrieval log button now works correctly. New `/api/chats/duplicate` and `/api/systems` CRUD endpoints on the backend. New `echo_systems/` directory auto-created on first run. |
-| **v1.7** | Embedding auto-truncation. Profiles folder. Graceful KB load. Broken KB detection. Auto-enable RAG on KB load. Chunk size warning banner. |
-| **v1.6** | Sidebar auto-updates instantly when a session ends. Full async save chain. |
-| **v1.5** | Fixed missing `@app.route` decorator for `/api/rag/status`. Broken KB detection with ⚠ badge and ⟳ REPAIR. |
-| **v1.4** | Loading a KB restores chunk size, overlap, and embedding model to UI fields. |
-| **v1.3** | Dual Ollama embed API support (`/api/embed` + `/api/embeddings`). Embed VRAM unload endpoint. Natural-language awareness injection. Embedding retrieval log auto-open. |
-| **v1.2** | AI Awareness injection: Standard vs Custom mode. `{name}` / `{others}` placeholders. Awareness state saved and restored. |
-| **v1.1** | Ollama Embeddings RAG. Knowledge Base persistence. Custom Model Profiles. Up to 4 model slots. Display names. RAG mutual exclusion. Embedding progress bar. Re-embed warning. RAG prompt template. Embed model unload. Separate retrieval logs. AbortController stop. |
+| **v0.85** | **Streaming disconnect fix** — proxy now uses a `try/finally` generator that calls `upstream_response.close()` on client abort, signalling Ollama to stop generating immediately instead of running to completion in the background (eliminated 30-second 503 window after Stop). **Clear deletes server file** — ✕ CLEAR now calls `DELETE /api/chats/delete/{id}` before wiping the UI, so the chat cannot be restored on page refresh. **Sidebar live updates** — `autoSaveChat()` always calls `loadChatList()` after a save (moved outside try/catch); `newChat()` now `await`s the save before resetting `activeChatId`, eliminating the race condition that caused new/deleted chats to appear only after a page reload. **Version scheme reset to 0.x.** |
+| **v0.80** | **Global Stop fix** — STOP now terminates the entire turn (all remaining models), not just the active stream. **Skip** — new ⏭ SKIP button aborts the current model only and advances to the next slot. **Pause / Inject / Resume** — new ⏸ PAUSE freezes the turn mid-sequence; user can inject a message (INJECT & RESUME) or simply resume without injecting. **Chat Duplication** — right-click any saved chat to deep-copy it including all settings, prompts, parameters, and history. **Multi-AI Systems Presets** — new ⬡ SYSTEMS panel with save/load/edit/fork/delete; two built-in expert-tuned templates: Trialogue (Teacher↔Student↔Mediator) and Devil's Advocate Debate (Proposer↔Challenger↔Judge). **Context role-mapping fix** — `buildMsgsN()` now uses the stored `slot` field on each history entry instead of a positional counter, fixing context drift after stops, skips, or slot changes. **RAG log fix** — `toggleRagLog()` was referenced but never defined; keyword retrieval log button now works correctly. New `/api/chats/duplicate` and `/api/systems` CRUD endpoints on the backend. New `echo_systems/` directory auto-created on first run. |
+| **v0.70** | Embedding auto-truncation. Profiles folder. Graceful KB load. Broken KB detection. Auto-enable RAG on KB load. Chunk size warning banner. |
+| **v0.60** | Sidebar auto-updates instantly when a session ends. Full async save chain. |
+| **v0.50** | Fixed missing `@app.route` decorator for `/api/rag/status`. Broken KB detection with ⚠ badge and ⟳ REPAIR. |
+| **v0.40** | Loading a KB restores chunk size, overlap, and embedding model to UI fields. |
+| **v0.30** | Dual Ollama embed API support (`/api/embed` + `/api/embeddings`). Embed VRAM unload endpoint. Natural-language awareness injection. Embedding retrieval log auto-open. |
+| **v0.20** | AI Awareness injection: Standard vs Custom mode. `{name}` / `{others}` placeholders. Awareness state saved and restored. |
+| **v0.10** | Ollama Embeddings RAG. Knowledge Base persistence. Custom Model Profiles. Up to 4 model slots. Display names. RAG mutual exclusion. Embedding progress bar. Re-embed warning. RAG prompt template. Embed model unload. Separate retrieval logs. AbortController stop. |
 
 ---
 
