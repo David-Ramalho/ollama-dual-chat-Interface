@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Echo // Multi-Mind v1.8</title>
+<title>Echo // Multi-Mind v0.85</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -361,7 +361,7 @@ button:disabled{opacity:.35;cursor:not-allowed;}
 <!-- ── SIDEBAR ─────────────────────────────────────────────────────────── -->
 <div id="sidebar">
   <div class="sb-top">
-    <div class="sb-logo">ECHO // MULTI-MIND <span style="font-size:9px;opacity:.4;-webkit-text-fill-color:var(--dim)">v1.8</span></div>
+    <div class="sb-logo">ECHO // MULTI-MIND <span style="font-size:9px;opacity:.4;-webkit-text-fill-color:var(--dim)">v0.85</span></div>
     <button class="sb-new-btn" onclick="newChat()">＋ <span>New Chat</span></button>
     <div class="sb-toggle" id="sbToggle" onclick="toggleSidebar()">◀</div>
   </div>
@@ -387,7 +387,7 @@ button:disabled{opacity:.35;cursor:not-allowed;}
 
 <!-- ── HEADER ─────────────────────────────────────────────────────────── -->
 <header>
-  <div class="hdr-logo"><span>ECHO</span> // MULTI-MIND</div>
+  <div class="hdr-logo"><span>ECHO</span> // MULTI-MIND <span style="-webkit-text-fill-color:var(--dim);background:none">v0.85</span></div>
   <div class="hdr-pills">
     <div class="pill" id="turnPill" style="display:none">⏱ <span id="turnInfo">TURN 0/0</span></div>
     <div class="pill" id="tokPillA" style="display:none"><span style="color:var(--a)">A</span> <span id="tokInfoA">—</span></div>
@@ -1456,7 +1456,13 @@ async function endSession(){
   if(chatLog.length&&chatDirty) await autoSaveChat();
 }
 
-function clearAll(){
+async function clearAll(){
+  // ── v0.85 fix: delete the server-side file so it doesn't restore on refresh ──
+  if(activeChatId){
+    try{ await fetch(`${API}/api/chats/delete/${activeChatId}`,{method:'DELETE'}); }catch(e){}
+    activeChatId=null;
+    await loadChatList();   // remove the entry from the sidebar immediately
+  }
   document.getElementById('chat').innerHTML=`<div id="empty"><div class="empty-icon">⬡</div><div>Select models · set prompts · hit AUTO</div><div style="font-size:12px;color:var(--dim)">Or type a message to start manually</div><div class="empty-badge"><div class="dot" style="width:5px;height:5px"></div>Proxying Ollama @ localhost:11434</div></div>`;
   convHistory=[]; chatLog=[]; chatDirty=false;
   paused=false; skipCurrent=false;
@@ -1518,7 +1524,7 @@ function updateTurnPill(cur,total){
 function saveChat(stripAwareness){
   if(!chatLog.length){ alert('Nothing to save yet!'); return; }
   const now=new Date().toISOString().replace(/[:.]/g,'-').substring(0,19);
-  let txt=`ECHO // MULTI-MIND v1.8${stripAwareness?' — Fine-Tuning Export':' — Chat Export'}\n`;
+  let txt=`ECHO // MULTI-MIND v0.85${stripAwareness?' — Fine-Tuning Export':' — Chat Export'}\n`;
   txt+=`Date: ${new Date().toLocaleString()}\n`;
   activeSlots.forEach(s=>txt+=`Slot ${s}: ${getSlotName(s)} (${getModel(s)})\n`);
   if(stripAwareness) txt+=`[AI awareness injection stripped from system prompts]\n`;
@@ -2128,8 +2134,10 @@ async function autoSaveChat(){
   };
   try{
     await fetch(`${API}/api/chats/save`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    activeChatId=id; chatDirty=false; await loadChatList();
+    activeChatId=id; chatDirty=false;
   }catch(e){}
+  // ── v0.85 fix: always refresh sidebar, even on save error ──────────────────
+  await loadChatList();
 }
 
 async function createFolder(){
@@ -2192,9 +2200,10 @@ async function moveChat(chatId,folder){
   }catch(e){ console.error('moveChat error',e); }
 }
 
-function newChat(){
+async function newChat(){
   if(chatDirty&&chatLog.length&&!confirm('Start a new chat? Current session will be saved.')) return;
-  if(chatDirty&&chatLog.length) autoSaveChat();
+  // ── v0.85 fix: await the save so loadChatList runs BEFORE we wipe activeChatId ─
+  if(chatDirty&&chatLog.length) await autoSaveChat();
   activeChatId=null; chatDirty=false;
   clearAll();
   // Reset all parameters to defaults — prevents bleed from previous session
