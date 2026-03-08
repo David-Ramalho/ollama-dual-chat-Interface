@@ -1,5 +1,5 @@
 """
-Echo // Multi-Mind v1.8
+Echo // Multi-Mind v0.85
 - Keyword RAG + Ollama Embedding RAG
 - Knowledge Base persistence (saved to echo_knowledge/)
 - Chat & folder persistence (echo_chats/)
@@ -7,8 +7,10 @@ Echo // Multi-Mind v1.8
 - Multi-AI Systems Presets (echo_systems/systems.json)
 - Embedding: auto-truncates chunks that exceed model context window
 - KB load: filters empty-embedding chunks instead of blocking
-- v1.8: Chat duplication, Systems presets, Skip/Pause flow control,
+- v0.80: Chat duplication, Systems presets, Skip/Pause flow control,
          Global stop fix, Context role-mapping fix, RAG log fix
+- v0.85: Fix streaming disconnect (ChunkedEncodingError on client abort),
+          Fix clearAll deletes server-side file, Fix sidebar live updates
 
 Install: pip install flask requests flask-cors
 Run:     python echo_server.py
@@ -607,6 +609,23 @@ def proxy_tags():
     except Exception as e:
         return jsonify({"error": str(e), "models": []}), 503
 
+def _stream_response(upstream_response):
+    """Stream chunks from an upstream requests.Response, handling client disconnects cleanly.
+
+    When the browser aborts (Stop button / AbortController), Flask stops reading
+    from this generator.  Without a try/finally the upstream connection to Ollama
+    stays open and keeps generating until the full response is done, blocking
+    subsequent requests for 30-60 s.  Closing `upstream_response` here sends a
+    RST to Ollama so it can stop immediately and free VRAM for the next request.
+    """
+    try:
+        for chunk in upstream_response.iter_content(chunk_size=None):
+            yield chunk
+    except Exception:
+        pass  # client disconnected mid-stream – that's fine
+    finally:
+        upstream_response.close()
+
 @app.route('/api/generate', methods=['POST'])
 def proxy_generate():
     data   = request.json or {}
@@ -614,8 +633,7 @@ def proxy_generate():
     try:
         r = requests.post(f"{OLLAMA_URL}/api/generate", json=data, stream=stream, timeout=120)
         if stream:
-            return Response((c for c in r.iter_content(chunk_size=None)),
-                            content_type='application/x-ndjson')
+            return Response(_stream_response(r), content_type='application/x-ndjson')
         return Response(r.content, content_type='application/json')
     except Exception as e:
         return jsonify({"error": str(e)}), 503
@@ -659,8 +677,7 @@ def proxy_chat():
     try:
         r = requests.post(f"{OLLAMA_URL}/api/chat", json=data, stream=stream, timeout=120)
         if stream:
-            return Response((c for c in r.iter_content(chunk_size=None)),
-                            content_type='application/x-ndjson')
+            return Response(_stream_response(r), content_type='application/x-ndjson')
         return Response(r.content, content_type='application/json')
     except Exception as e:
         return jsonify({"error": str(e)}), 503
@@ -679,7 +696,7 @@ def serve_static(path):
 
 if __name__ == '__main__':
     print("═" * 58)
-    print("  ECHO // MULTI-MIND  v1.8")
+    print("  ECHO // MULTI-MIND  v0.85")
     print("═" * 58)
     print(f"  UI:        http://localhost:8080")
     print(f"  Ollama:    {OLLAMA_URL}")
