@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Echo // Multi-Mind v1.7</title>
+<title>Echo // Multi-Mind v1.8</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -175,7 +175,32 @@ button:disabled{opacity:.35;cursor:not-allowed;}
 .btn-primary:hover{background:#9ba5fa;border-color:#9ba5fa;color:#fff;}
 .btn-stop{border-color:var(--danger);color:var(--danger);}
 .btn-stop:hover{background:rgba(248,113,113,.1);}
+.btn-skip{border-color:var(--warn);color:var(--warn);}
+.btn-skip:hover{background:rgba(251,191,36,.1);}
+.btn-pause{border-color:var(--c);color:var(--c);}
+.btn-pause:hover{background:rgba(251,146,60,.1);}
+.btn-resume{border-color:var(--b);color:var(--b);animation:pulse-border 1.4s ease-in-out infinite;}
+.btn-resume:hover{background:rgba(52,211,153,.1);}
+@keyframes pulse-border{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,.4);}50%{box-shadow:0 0 0 4px rgba(52,211,153,0);}}
 .btn-clear{color:var(--dim);}
+/* ── SYSTEMS ─────────────────────────────────────────────────────────────── */
+.sys-preset{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--bg3);
+  border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;transition:border-color .2s;}
+.sys-preset:hover{border-color:var(--a);}
+.sys-preset-info{flex:1;min-width:0;}
+.sys-preset-name{font-size:13px;font-weight:600;color:var(--txt);margin-bottom:2px;}
+.sys-preset-desc{font-size:11px;color:var(--txt2);margin-bottom:5px;}
+.sys-preset-slots{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;}
+.sys-slot-badge{font-size:10px;padding:2px 7px;border-radius:12px;background:var(--bg4);
+  border:1px solid var(--border);color:var(--txt2);font-family:'JetBrains Mono',monospace;}
+.sys-preset-actions{display:flex;gap:6px;flex-shrink:0;flex-direction:column;align-items:flex-end;}
+.sys-builtin-badge{font-size:9px;letter-spacing:1px;color:var(--rag);opacity:.7;text-transform:uppercase;padding:2px 6px;
+  border:1px solid rgba(34,211,238,.3);border-radius:10px;margin-bottom:4px;text-align:center;}
+/* pause overlay notice */
+#pauseNotice{display:none;background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.4);
+  border-radius:var(--radius);padding:10px 14px;margin:6px 16px;font-size:12px;color:var(--c);
+  flex-shrink:0;align-items:center;gap:10px;}
+#pauseNotice.visible{display:flex;}
 .btn-send{background:var(--a);border-color:var(--a);color:#fff;padding:9px 18px;}
 .btn-send:hover{background:#9ba5fa;border-color:#9ba5fa;}
 .btn-rag{border-color:var(--rag);color:var(--rag);}
@@ -336,7 +361,7 @@ button:disabled{opacity:.35;cursor:not-allowed;}
 <!-- ── SIDEBAR ─────────────────────────────────────────────────────────── -->
 <div id="sidebar">
   <div class="sb-top">
-    <div class="sb-logo">ECHO // MULTI-MIND <span style="font-size:9px;opacity:.4;-webkit-text-fill-color:var(--dim)">v1.7</span></div>
+    <div class="sb-logo">ECHO // MULTI-MIND <span style="font-size:9px;opacity:.4;-webkit-text-fill-color:var(--dim)">v1.8</span></div>
     <button class="sb-new-btn" onclick="newChat()">＋ <span>New Chat</span></button>
     <div class="sb-toggle" id="sbToggle" onclick="toggleSidebar()">◀</div>
   </div>
@@ -439,11 +464,16 @@ button:disabled{opacity:.35;cursor:not-allowed;}
       </div>
       <button class="btn-primary" id="btnAuto" onclick="startAuto()">▶ AUTO</button>
       <button class="btn-stop" id="btnStop" onclick="stopAll()" style="display:none">■ STOP</button>
+      <button class="btn-skip" id="btnSkip" onclick="skipModel()" style="display:none" title="Skip current model, continue to next">⏭ SKIP</button>
+      <button class="btn-pause" id="btnPause" onclick="pauseSession()" style="display:none" title="Pause turn and inject a message">⏸ PAUSE</button>
+      <button class="btn-resume" id="btnResume" onclick="resumeSession()" style="display:none" title="Resume paused turn">▶ RESUME</button>
       <button class="btn-clear" onclick="clearAll()">✕ CLEAR</button>
     </div>
     <div class="btn-row">
       <button id="btnSettings" onclick="togglePanel('settings-panel','btnSettings')">⚙ SETTINGS</button>
       <button class="btn-rag" id="btnRag" onclick="togglePanel('rag-panel','btnRag')">◈ RAG</button>
+      <button id="btnSystems" onclick="togglePanel('systems-panel','btnSystems')" style="border-color:var(--d);color:var(--d)">⬡ SYSTEMS</button>
+      <button onclick="saveCurrentAsSystem()" style="font-size:10px;color:var(--dim)" title="Save current slot config as a System preset">⬡ SAVE SYS</button>
       <button onclick="saveChat(false)" title="Export as .txt">↓ TXT</button>
       <button onclick="saveChat(true)" title="Export clean (no awareness injection)" style="font-size:10px;color:var(--dim)">↓ FT</button>
     </div>
@@ -730,6 +760,26 @@ button:disabled{opacity:.35;cursor:not-allowed;}
   </div>
 </div>
 
+<!-- ── SYSTEMS PANEL ──────────────────────────────────────────────────── -->
+<div class="exp-panel" id="systems-panel">
+  <div class="panel-inner">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:12px;color:var(--txt2);font-weight:600;">⬡ MULTI-AI SYSTEMS — Preset multi-agent configurations</div>
+      <div style="display:flex;gap:7px;">
+        <button onclick="openSystemEditor(null)" style="font-size:11px;padding:5px 12px;color:var(--d);border-color:var(--d)">+ NEW SYSTEM</button>
+        <button onclick="loadSystemsList()" style="font-size:10px;padding:4px 9px;color:var(--dim)">↻ REFRESH</button>
+      </div>
+    </div>
+    <div id="systemsList"></div>
+  </div>
+</div>
+
+<!-- Pause notice bar -->
+<div id="pauseNotice">
+  <span>⏸ PAUSED — type a message below and press <strong>INJECT &amp; RESUME</strong> to insert it into the conversation, or click <strong>RESUME</strong> to continue.</span>
+  <button onclick="injectDuringPause()" style="font-size:11px;padding:5px 12px;background:var(--c);border-color:var(--c);color:#fff;white-space:nowrap;">INJECT &amp; RESUME</button>
+</div>
+
 <!-- Chat area -->
 <div id="chat">
   <div id="empty">
@@ -794,10 +844,43 @@ button:disabled{opacity:.35;cursor:not-allowed;}
   </div>
 </div>
 
+<!-- System Editor Modal -->
+<div class="modal-overlay" id="systemModal">
+  <div class="modal" style="max-width:700px;max-height:88vh;overflow-y:auto;">
+    <div class="modal-title">
+      <span id="systemModalTitle">New Multi-AI System</span>
+      <span class="modal-close" onclick="closeSystemEditor()">✕</span>
+    </div>
+    <div class="form-row">
+      <div class="form-label">System Name *</div>
+      <input type="text" id="sysName" placeholder="e.g. Debate Club, Trialogue, Research Panel…">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Description</div>
+      <input type="text" id="sysDesc" placeholder="Short description of the system's purpose">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Default Turns</div>
+      <input type="number" id="sysTurns" value="6" min="1" max="50" style="max-width:80px">
+    </div>
+    <div style="font-size:11px;color:var(--dim);margin:10px 0 6px;font-weight:500;border-top:1px solid var(--border);padding-top:10px;">
+      SLOT CONFIGURATIONS — configure each participant's role
+    </div>
+    <div id="sysSlotConfigs" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <div style="margin-top:10px;">
+      <button onclick="addSysSlotConfig()" style="font-size:11px;border-style:dashed;color:var(--b);border-color:var(--b)">+ Add Slot</button>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeSystemEditor()">Cancel</button>
+      <button class="btn-primary" onclick="saveSystem()">Save System</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── STATE ─────────────────────────────────────────────────────────────────────
 const API = '';
-let running=false, stop=false;
+let running=false, stop=false, skipCurrent=false, paused=false;
 let useRag=false, ragLoaded=false;
 let ragMode='keyword';
 let convHistory=[], chatLog=[];
@@ -808,9 +891,65 @@ let awarenessMode={A:'standard',B:'standard',C:'standard',D:'standard'};
 let awarenessCustom={A:'',B:'',C:'',D:''};
 let embedPollTimer=null;
 let pendingProfileApply=null;
+let _pauseResolve=null;  // resolves pause Promise when user resumes
+let editingSystemId=null;
+let sysSlotCount=2;
 // Track what params were used for current embeddings to show re-embed warning
 let lastEmbedParams={model:'',chunkSize:0};
 const SLOT_COLORS={A:'var(--a)',B:'var(--b)',C:'var(--c)',D:'var(--d)'};
+const SLOT_LETTERS=['A','B','C','D'];
+
+// ── BUILT-IN SYSTEM PRESETS ───────────────────────────────────────────────────
+const BUILTIN_SYSTEMS = [
+  {
+    id: 'builtin_trialogue',
+    name: 'Trialogue',
+    description: 'Teacher ↔ Student ↔ Mediator — guided Socratic learning dialogue',
+    builtin: true,
+    turns: 9,
+    slots: [
+      {
+        slot:'A', name:'Teacher',
+        systemPrompt:'You are a wise and patient Teacher in a Socratic dialogue. Your role is to guide understanding through carefully chosen questions, vivid examples, and structured explanations. Never simply give answers — ask probing questions that lead the Student to discover them independently. Respond with depth and intellectual rigor, but keep responses focused and readable. Acknowledge the Mediator\'s summaries and build on them.',
+        awareness:true, params:{temperature:0.7, top_p:0.9, top_k:40, num_predict:1024, repeat_penalty:1.1, num_ctx:4096}
+      },
+      {
+        slot:'B', name:'Student',
+        systemPrompt:'You are a curious, engaged Student in a Socratic dialogue. Ask genuine questions when confused — never pretend to understand. Attempt answers even when uncertain; your mistakes are the most valuable part of learning. Push back on explanations that don\'t make sense to you. Show your reasoning process openly. Be enthusiastic but intellectually honest about your level of understanding.',
+        awareness:true, params:{temperature:0.85, top_p:0.92, top_k:45, num_predict:768, repeat_penalty:1.1, num_ctx:4096}
+      },
+      {
+        slot:'C', name:'Mediator',
+        systemPrompt:'You are a neutral, sharp Mediator in a dialogue between a Teacher and a Student. Your role each turn: (1) briefly summarize the key insight exchanged so far — one or two sentences maximum, (2) identify any gap, misconception, or unresolved question, (3) propose one concrete follow-up question or angle to deepen the inquiry. Stay concise. Do not take sides. Facilitate, do not lecture.',
+        awareness:true, params:{temperature:0.6, top_p:0.85, top_k:35, num_predict:512, repeat_penalty:1.15, num_ctx:4096}
+      }
+    ]
+  },
+  {
+    id: 'builtin_debate',
+    name: 'Devil\'s Advocate Debate',
+    description: 'Proposer ↔ Challenger — structured two-sided argument with a Judge',
+    builtin: true,
+    turns: 8,
+    slots: [
+      {
+        slot:'A', name:'Proposer',
+        systemPrompt:'You are a skilled debater arguing FOR the proposition presented to you. Build your case logically with evidence, analogies, and principled reasoning. Directly address and rebut the Challenger\'s counter-arguments. Be persuasive but intellectually honest — acknowledge strong counter-points before refuting them. Keep each response tight and punchy.',
+        awareness:true, params:{temperature:0.75, top_p:0.9, top_k:40, num_predict:896, repeat_penalty:1.1, num_ctx:4096}
+      },
+      {
+        slot:'B', name:'Challenger',
+        systemPrompt:'You are a skilled Devil\'s Advocate arguing AGAINST the proposition. Your job is to find the strongest possible objections, expose hidden assumptions, cite counterexamples, and stress-test the Proposer\'s logic. Be intellectually rigorous and respectful. Do not simply contradict — offer substantive alternative perspectives. Directly engage with the Proposer\'s specific claims.',
+        awareness:true, params:{temperature:0.75, top_p:0.9, top_k:40, num_predict:896, repeat_penalty:1.1, num_ctx:4096}
+      },
+      {
+        slot:'C', name:'Judge',
+        systemPrompt:'You are an impartial Judge evaluating a structured debate. Each turn: assess the quality of arguments made in the last exchange (logic, evidence, persuasiveness), identify the strongest point from each side, and declare a provisional round winner with brief reasoning. At the end of your assessment, pose one sharp question to keep the debate productive. Remain strictly neutral — your job is clarity, not advocacy.',
+        awareness:true, params:{temperature:0.55, top_p:0.85, top_k:35, num_predict:600, repeat_penalty:1.12, num_ctx:4096}
+      }
+    ]
+  }
+];
 
 // Known dedicated embedding models (shown first / flagged)
 const EMBED_MODEL_HINTS=['nomic-embed-text','mxbai-embed-large','bge-m3','all-minilm',
@@ -983,6 +1122,8 @@ function resetAllParams(){
 }
 
 // ── MESSAGE HISTORY BUILDING ───────────────────────────────────────────────────
+// Uses the stored `slot` field on each assistant entry for accurate role mapping.
+// This is robust to partial histories (stopped turns), slot changes, and repeated models.
 function buildMsgsN(history, slotIndex, allSlots, sysPrompt){
   const s=allSlots[slotIndex];
   // Awareness goes BEFORE system prompt — clean, brief line
@@ -990,21 +1131,21 @@ function buildMsgsN(history, slotIndex, allSlots, sysPrompt){
   const fullSys=awareness+(sysPrompt||'');
   const msgs=[];
   if(fullSys.trim()) msgs.push({role:'system',content:fullSys});
-  let aiTurn=0;
   for(const h of history){
     if(h.role==='user'){
       msgs.push({role:'user',content:h.content});
     } else {
-      const speakerIdx=aiTurn%allSlots.length;
-      const isMe=speakerIdx===slotIndex;
-      // If awareness is on and it's not me: prefix with speaker name so model knows who said what
-      let content=h.content;
-      if(awarenessFlags[s]&&!isMe){
-        const speakerName=getSlotName(allSlots[speakerIdx]);
-        content=`${speakerName}: ${h.content}`;
+      // Use the stored `slot` field for accurate speaker identification.
+      // Falls back to first slot if no slot field (legacy history entries).
+      const speakerSlot = h.slot || allSlots[0];
+      const isMe = speakerSlot === s;
+      let content = h.content;
+      // Prefix other speakers' content with their display name so model knows who said what
+      if(awarenessFlags[s] && !isMe){
+        const speakerName = allSlots.includes(speakerSlot) ? getSlotName(speakerSlot) : (speakerSlot||'Other');
+        content = `${speakerName}: ${h.content}`;
       }
       msgs.push({role:isMe?'assistant':'user',content});
-      aiTurn++;
     }
   }
   return msgs;
@@ -1143,9 +1284,11 @@ async function startAuto(){
   const turns=parseInt(document.getElementById('turns').value)||4;
   if(activeSlots.length<2){ alert('Add at least 2 model slots (+ B button) for AUTO mode.'); return; }
   for(const s of activeSlots){ if(!getModel(s)){ alert(`No model for slot ${s}`); return; } }
-  stop=false; running=true; chatDirty=true;
+  stop=false; skipCurrent=false; paused=false; running=true; chatDirty=true;
   document.getElementById('btnAuto').style.display='none';
   document.getElementById('btnStop').style.display='inline-block';
+  document.getElementById('btnSkip').style.display='inline-block';
+  document.getElementById('btnPause').style.display='inline-block';
   setOllama(true,'RUNNING'); updateTurnPill(0,turns);
   const seedText=document.getElementById('inp').value.trim()||"Hello! Let's have a thoughtful conversation.";
   if(document.getElementById('inp').value.trim()){
@@ -1154,26 +1297,47 @@ async function startAuto(){
     document.getElementById('inp').value=''; resizeTA(document.getElementById('inp'));
   }
   addSys(`▶ AUTO — ${turns} TURNS — ${activeSlots.map(s=>getSlotName(s)).join(' ↔ ')}`);
-  convHistory=[{role:'user',content:seedText}];
+  // Only reset history if starting fresh — preserve existing context when continuing
+  if(convHistory.length === 0){
+    convHistory = [{role:'user', content:seedText}];
+  } else {
+    convHistory.push({role:'user', content:seedText});
+  }
+  outerLoop:
   for(let i=0;i<turns*activeSlots.length;i++){
     if(stop) break;
     const slotIdx=i%activeSlots.length;
     const s=activeSlots[slotIdx];
     updateTurnPill(Math.floor(i/activeSlots.length)+1,turns);
+    // ── PAUSE CHECK ────────────────────────────────────────────────
+    if(paused){
+      setOllama(true,'PAUSED');
+      await new Promise(r=>{ _pauseResolve=r; });
+      _pauseResolve=null;
+      if(stop) break;
+      // After resume, flush any injected user message and re-start this slot
+    }
     const model=getModel(s);
     const el=addMsg(s,model,'',true);
     setOllama(true,`${getSlotName(s).toUpperCase()} THINKING…`);
     try{
       const msgs=buildMsgsN(convHistory,slotIdx,activeSlots,getSys(s));
       const result=await stream(model,msgs,getParams(s),el);
-      if(!result||stop){ if(el) finalizeMsg(el,'[stopped]',model,s); break; }
+      // ── SKIP ────────────────────────────────────────────────────
+      if(!result && skipCurrent){
+        skipCurrent=false;
+        finalizeMsg(el,'[skipped]',model,s);
+        addSys(`⏭ SKIPPED ${getSlotName(s)}`);
+        continue; // move to next slot without breaking
+      }
+      if(!result||stop){ if(el) finalizeMsg(el,'[stopped]',model,s); break outerLoop; }
       const{text:resp,promptTokens,evalTokens}=result;
       const cleanResp=finalizeMsg(el,resp,model,s);
       showTokens(el,promptTokens,evalTokens,s);
       convHistory.push({role:'assistant',content:cleanResp,model,slot:s});
       if(useRag&&ragLoaded) fetchRagLog();
       if(!stop) await sleep(500);
-    }catch(e){ if(el) finalizeMsg(el,`[Error: ${e.message}]`,model,s); break; }
+    }catch(e){ if(el) finalizeMsg(el,`[Error: ${e.message}]`,model,s); break outerLoop; }
   }
   addSys('■ CONVERSATION ENDED');
   await endSession();
@@ -1187,8 +1351,10 @@ async function sendUser(){
   chatLog.push({type:'msg',slot:'u',model:'User',think:'',text});
   inp.value=''; resizeTA(inp);
   convHistory.push({role:'user',content:text});
-  stop=false; running=true; chatDirty=true;
+  stop=false; skipCurrent=false; paused=false; running=true; chatDirty=true;
   document.getElementById('btnStop').style.display='inline-block';
+  document.getElementById('btnSkip').style.display='inline-block';
+  document.getElementById('btnPause').style.display='inline-block';
   setOllama(true,'RESPONDING…');
   for(let i=0;i<activeSlots.length;i++){
     if(stop) break;
@@ -1200,6 +1366,13 @@ async function sendUser(){
     try{
       const msgs=buildMsgsN(convHistory,i,activeSlots,getSys(s));
       const result=await stream(model,msgs,getParams(s),el);
+      if(!result && skipCurrent){
+        skipCurrent=false;
+        finalizeMsg(el,'[skipped]',model,s);
+        addSys(`⏭ SKIPPED ${getSlotName(s)}`);
+        continue;
+      }
+      if(!result||stop){ if(el) finalizeMsg(el,'[stopped]',model,s); break; }
       const{text:resp,promptTokens,evalTokens}=result||{};
       const cleanResp=finalizeMsg(el,resp||'',model,s);
       showTokens(el,promptTokens,evalTokens,s);
@@ -1211,17 +1384,73 @@ async function sendUser(){
 }
 
 // ── SESSION ────────────────────────────────────────────────────────────────────
-function stopAll(){
-  stop=true;
+// Global stop — terminates the ENTIRE turn, not just the current model.
+// Sets stop=true (the loops check this before each slot) and aborts the active stream.
+async function stopAll(){
+  stop=true; paused=false; skipCurrent=false;
   if(_abort){ _abort.abort(); _abort=null; }
-  addSys('■ STOPPED');
-  endSession();
+  // If paused, resolve the pause Promise so the loop can observe stop=true and exit
+  if(_pauseResolve){ _pauseResolve(null); _pauseResolve=null; }
+  addSys('■ STOPPED — ALL MODELS');
+  await endSession();
+}
+
+// Skip current model only — abort stream but keep loop running for next slot.
+function skipModel(){
+  if(!running) return;
+  skipCurrent=true;
+  if(_abort){ _abort.abort(); _abort=null; }
+}
+
+// Pause the turn — abort current stream, freeze loop until resume.
+function pauseSession(){
+  if(!running||paused) return;
+  paused=true;
+  if(_abort){ _abort.abort(); _abort=null; }
+  // Hide pause, show resume
+  document.getElementById('btnPause').style.display='none';
+  document.getElementById('btnResume').style.display='inline-block';
+  document.getElementById('btnSkip').style.display='none';
+  document.getElementById('pauseNotice').classList.add('visible');
+  addSys('⏸ PAUSED — inject a message or click RESUME to continue');
+  setOllama(true,'PAUSED');
+}
+
+// Resume a paused session without injecting a message.
+function resumeSession(){
+  if(!paused) return;
+  paused=false;
+  document.getElementById('btnResume').style.display='none';
+  document.getElementById('btnPause').style.display='inline-block';
+  document.getElementById('btnSkip').style.display='inline-block';
+  document.getElementById('pauseNotice').classList.remove('visible');
+  setOllama(true,'RUNNING');
+  if(_pauseResolve){ _pauseResolve(null); _pauseResolve=null; }
+}
+
+// Inject a user message mid-turn, then resume.
+function injectDuringPause(){
+  const inp=document.getElementById('inp');
+  const text=inp.value.trim();
+  if(text){
+    addMsg('u','User',text);
+    chatLog.push({type:'msg',slot:'u',model:'User',think:'',text});
+    convHistory.push({role:'user',content:text});
+    inp.value=''; resizeTA(inp);
+    addSys(`◈ INJECTED: "${text.substring(0,60)}${text.length>60?'…':''}"`);
+  }
+  resumeSession();
 }
 
 async function endSession(){
-  running=false; stop=false;
+  running=false; stop=false; skipCurrent=false; paused=false;
+  if(_pauseResolve){ _pauseResolve(null); _pauseResolve=null; }
   document.getElementById('btnAuto').style.display='';
   document.getElementById('btnStop').style.display='none';
+  document.getElementById('btnSkip').style.display='none';
+  document.getElementById('btnPause').style.display='none';
+  document.getElementById('btnResume').style.display='none';
+  document.getElementById('pauseNotice').classList.remove('visible');
   document.getElementById('turnPill').style.display='none';
   setOllama(true,'READY');
   if(chatLog.length&&chatDirty) await autoSaveChat();
@@ -1230,6 +1459,8 @@ async function endSession(){
 function clearAll(){
   document.getElementById('chat').innerHTML=`<div id="empty"><div class="empty-icon">⬡</div><div>Select models · set prompts · hit AUTO</div><div style="font-size:12px;color:var(--dim)">Or type a message to start manually</div><div class="empty-badge"><div class="dot" style="width:5px;height:5px"></div>Proxying Ollama @ localhost:11434</div></div>`;
   convHistory=[]; chatLog=[]; chatDirty=false;
+  paused=false; skipCurrent=false;
+  document.getElementById('pauseNotice').classList.remove('visible');
   ['A','B','C','D'].forEach(s=>{ const p=document.getElementById('tokPill'+s); if(p) p.style.display='none'; });
   endSession();
 }
@@ -1287,7 +1518,7 @@ function updateTurnPill(cur,total){
 function saveChat(stripAwareness){
   if(!chatLog.length){ alert('Nothing to save yet!'); return; }
   const now=new Date().toISOString().replace(/[:.]/g,'-').substring(0,19);
-  let txt=`ECHO // MULTI-MIND v1.7${stripAwareness?' — Fine-Tuning Export':' — Chat Export'}\n`;
+  let txt=`ECHO // MULTI-MIND v1.8${stripAwareness?' — Fine-Tuning Export':' — Chat Export'}\n`;
   txt+=`Date: ${new Date().toLocaleString()}\n`;
   activeSlots.forEach(s=>txt+=`Slot ${s}: ${getSlotName(s)} (${getModel(s)})\n`);
   if(stripAwareness) txt+=`[AI awareness injection stripped from system prompts]\n`;
@@ -1432,6 +1663,16 @@ function toggleEmbedLog(){
   const wrap=document.getElementById('embedLogWrap');
   wrap.classList.toggle('open');
   document.getElementById('btnEmbedLog').textContent=wrap.classList.contains('open')?'◈ HIDE LOG':'◈ VIEW RETRIEVAL LOG';
+  if(wrap.classList.contains('open')) fetchRagLog();
+}
+
+// BUG FIX v1.8: toggleRagLog was referenced in HTML but never defined.
+// The keyword log wrap needs its own open/close toggle independent of the embed log.
+function toggleRagLog(){
+  const wrap=document.getElementById('ragLogWrap');
+  const btn=document.getElementById('btnRagLog');
+  wrap.classList.toggle('open');
+  if(btn) btn.textContent=wrap.classList.contains('open')?'◈ HIDE LOG':'◈ VIEW LOG';
   if(wrap.classList.contains('open')) fetchRagLog();
 }
 
@@ -1784,13 +2025,25 @@ async function loadChat(id){
     convHistory=[]; chatLog=[]; chatDirty=false;
     ['A','B','C','D'].forEach(s=>{ const p=document.getElementById('tokPill'+s); if(p) p.style.display='none'; });
     activeChatId=id;
-    // Replay
+    // Replay visually and rebuild chatLog
     d.log.forEach(entry=>{
       if(entry.type==='sys'){ addSys(entry.text); }
       else{
         const slot=entry.slot||entry.role||'A';
         const el=addMsg(slot,entry.model||'User','',false);
         finalizeMsg(el,(entry.think?`<think>${entry.think}</think>`:'')+( entry.text||''),entry.model||'User',slot);
+      }
+    });
+
+    // ── Rebuild convHistory from saved log so continuing works correctly ───────
+    convHistory = [];
+    chatLog = d.log ? [...d.log] : [];
+    d.log.forEach(entry=>{
+      if(entry.type!=='msg') return;
+      if(entry.slot==='u'||entry.model==='User'){
+        convHistory.push({role:'user', content:entry.text||''});
+      } else {
+        convHistory.push({role:'assistant', content:entry.text||'', model:entry.model||'', slot:entry.slot||'A'});
       }
     });
     // Restore models
@@ -1835,7 +2088,7 @@ async function loadChat(id){
     updateSlotLabels();
     chatDirty=false;
     document.querySelectorAll('.sb-item').forEach(e=>e.classList.toggle('active',e.dataset.id===id));
-    addSys(`◈ LOADED: ${d.title||id}`);
+    addSys(`◈ LOADED: ${d.title||id} — ${convHistory.length} messages restored to context`);
   }catch(e){ console.error('Load chat error',e); }
 }
 
@@ -1892,18 +2145,42 @@ function showMoveMenu(e,chatId){
     const menu=document.createElement('div');
     menu.className='ctx-menu';
     menu.style.cssText=`left:${e.clientX}px;top:${e.clientY}px;`;
+    // Duplicate option
+    const dupOpt=document.createElement('div');
+    dupOpt.className='ctx-opt';
+    dupOpt.innerHTML='📋 Duplicate';
+    dupOpt.onclick=(ev)=>{ ev.stopPropagation(); duplicateChat(chatId); menu.remove(); };
+    menu.appendChild(dupOpt);
+    // Separator
+    const sep=document.createElement('div');
+    sep.style.cssText='height:1px;background:var(--border);margin:3px 0;';
+    menu.appendChild(sep);
+    // Move options
+    const moveLabel=document.createElement('div');
+    moveLabel.style.cssText='padding:3px 12px;font-size:10px;color:var(--dim);letter-spacing:1px;';
+    moveLabel.textContent='MOVE TO';
+    menu.appendChild(moveLabel);
     const opts=[['📋 Root (no folder)',''], ...(d.folders||[]).map(f=>['📁 '+f, f])];
     opts.forEach(([label,val])=>{
       const opt=document.createElement('div');
       opt.className='ctx-opt'; opt.textContent=label;
-      // stopPropagation prevents the document click listener from firing before move completes
       opt.onclick=(ev)=>{ ev.stopPropagation(); moveChat(chatId,val); menu.remove(); };
       menu.appendChild(opt);
     });
     document.body.appendChild(menu);
-    // Small delay so the right-click event doesn't immediately dismiss
     setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),50);
   });
+}
+
+// ── CHAT DUPLICATION ──────────────────────────────────────────────────────────
+async function duplicateChat(id){
+  try{
+    const r=await fetch(`${API}/api/chats/duplicate/${id}`,{method:'POST'});
+    const d=await r.json();
+    if(d.error){ addSys(`[Duplicate error: ${d.error}]`); return; }
+    await loadChatList();
+    addSys(`◈ DUPLICATED → "${d.title}"`);
+  }catch(e){ console.error('duplicateChat error',e); }
 }
 
 async function moveChat(chatId,folder){
@@ -1926,14 +2203,215 @@ function newChat(){
   document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
 }
 
+// ── MULTI-AI SYSTEMS ──────────────────────────────────────────────────────────
+
+async function loadSystemsList(){
+  try{
+    const r=await fetch(`${API}/api/systems`);
+    const d=await r.json();
+    renderSystemsList(d.systems||[]);
+  }catch(e){ renderSystemsList([]); }
+}
+
+function renderSystemsList(userSystems){
+  const list=document.getElementById('systemsList');
+  if(!list) return;
+  const all=[...BUILTIN_SYSTEMS, ...userSystems];
+  if(!all.length){
+    list.innerHTML='<div style="color:var(--dim);font-size:11px;padding:8px 0">No systems yet. Click + NEW SYSTEM to create one from scratch, or click LOAD on a built-in template to get started.</div>';
+    return;
+  }
+  list.innerHTML=all.map(sys=>{
+    const isBuiltin=!!sys.builtin;
+    const slotBadges=(sys.slots||[]).map(sl=>{
+      const color=SLOT_COLORS[sl.slot]||'var(--dim)';
+      return `<span class="sys-slot-badge" style="border-color:${color};color:${color}">${sl.slot}: ${sl.name||sl.slot}</span>`;
+    }).join('');
+    return `
+    <div class="sys-preset">
+      <div class="sys-preset-info">
+        ${isBuiltin?'<div class="sys-builtin-badge">BUILT-IN</div>':''}
+        <div class="sys-preset-name">${sys.name}</div>
+        <div class="sys-preset-desc">${sys.description||''}</div>
+        <div class="sys-preset-slots">${slotBadges}</div>
+        <div style="font-size:10px;color:var(--dim)">${(sys.slots||[]).length} participants · ${sys.turns||4} default turns</div>
+      </div>
+      <div class="sys-preset-actions">
+        <button onclick="applySystem(${JSON.stringify(sys).replace(/"/g,'&quot;')})" style="font-size:11px;padding:5px 12px;color:var(--d);border-color:var(--d)">▶ LOAD</button>
+        ${!isBuiltin?`
+        <button onclick="openSystemEditor(${JSON.stringify(sys).replace(/"/g,'&quot;')})" style="font-size:11px;padding:5px 12px;color:var(--dim)">✏ EDIT</button>
+        <button onclick="deleteSystem('${sys.id}')" style="font-size:11px;padding:5px 12px;color:var(--danger);border-color:var(--danger)">✕</button>`
+        :`<button onclick="openSystemEditor(${JSON.stringify(sys).replace(/"/g,'&quot;').replace(/builtin&quot;:true/,'builtin&quot;:false')})" style="font-size:11px;padding:5px 12px;color:var(--dim)" title="Fork this built-in as your own system">⊕ FORK</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function applySystem(sys){
+  if(!confirm(`Load system "${sys.name}"?\nThis will configure slots A–${SLOT_LETTERS[(sys.slots||[]).length-1]||'A'} with the system's settings. Your current prompts and names will be replaced.`)) return;
+  const slots=sys.slots||[];
+  // Reset first
+  resetAllParams();
+  // Enable required slots
+  slots.forEach((slotCfg,i)=>{
+    const letter=slotCfg.slot||SLOT_LETTERS[i];
+    if(i>0&&!activeSlots.includes(letter)) addSlot(letter);
+    // Display name
+    const nameEl=document.getElementById('name'+letter);
+    if(nameEl){ nameEl.value=slotCfg.name||''; }
+    // System prompt
+    const sysEl=document.getElementById('sys'+letter);
+    if(sysEl) sysEl.value=slotCfg.systemPrompt||'';
+    // Params
+    const pm=slotCfg.params||{};
+    [['temp',pm.temperature],['topP',pm.top_p],['topK',pm.top_k],['maxT',pm.num_predict],['rep',pm.repeat_penalty],['ctx',pm.num_ctx]]
+      .forEach(([k,v])=>{ if(v===undefined) return; const el=document.getElementById(k+letter); if(el) el.value=v; });
+    // Awareness
+    if(slotCfg.awareness!==undefined){
+      awarenessFlags[letter]=!!slotCfg.awareness;
+      const atg=document.getElementById('awarenessToggle'+letter);
+      if(atg) atg.className='toggle-sw'+(awarenessFlags[letter]?' on':'');
+      const an=document.getElementById('awarenessNote'+letter);
+      if(an) an.style.display=awarenessFlags[letter]?'block':'none';
+    }
+  });
+  // Set turns
+  if(sys.turns){ const tel=document.getElementById('turns'); if(tel) tel.value=sys.turns; }
+  updateSlotLabels();
+  // Close panel
+  const panel=document.getElementById('systems-panel');
+  if(panel) panel.classList.remove('open');
+  const btn=document.getElementById('btnSystems');
+  if(btn) btn.classList.remove('open');
+  addSys(`⬡ SYSTEM LOADED: "${sys.name}" — ${slots.length} slots configured`);
+}
+
+function openSystemEditor(sys){
+  editingSystemId=sys&&!sys.builtin?sys.id:null;
+  document.getElementById('systemModalTitle').textContent=sys?'Edit System':'New Multi-AI System';
+  document.getElementById('sysName').value=sys?.name||'';
+  document.getElementById('sysDesc').value=sys?.description||'';
+  document.getElementById('sysTurns').value=sys?.turns||6;
+  sysSlotCount=0;
+  document.getElementById('sysSlotConfigs').innerHTML='';
+  const slots=sys?.slots||[{slot:'A',name:'',systemPrompt:''},{slot:'B',name:'',systemPrompt:''}];
+  slots.forEach(sl=>addSysSlotConfig(sl));
+  document.getElementById('systemModal').classList.add('open');
+}
+
+function closeSystemEditor(){
+  document.getElementById('systemModal').classList.remove('open');
+}
+
+function addSysSlotConfig(prefill){
+  const idx=sysSlotCount;
+  const letter=prefill?.slot||SLOT_LETTERS[idx]||'A';
+  const color=SLOT_COLORS[letter]||'var(--dim)';
+  sysSlotCount++;
+  const container=document.getElementById('sysSlotConfigs');
+  const div=document.createElement('div');
+  div.id=`sysSlotCfg${idx}`;
+  div.style.cssText='background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;position:relative;';
+  div.style.borderColor=color;
+  div.innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div class="slot-color ${letter}" style="width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 4px ${color};flex-shrink:0;"></div>
+      <strong style="font-size:12px;color:${color}">Slot ${letter}</strong>
+      ${idx>1?`<button onclick="this.closest('[id^=sysSlotCfg]').remove();sysSlotCount--;" style="margin-left:auto;font-size:10px;color:var(--danger);border-color:var(--danger);padding:2px 7px;">✕ Remove</button>`:''}
+    </div>
+    <div class="form-row" style="margin-bottom:7px;">
+      <div class="form-label">Display Name</div>
+      <input type="text" id="sysSlotName${idx}" placeholder="e.g. Teacher, Critic, Mediator…" value="${prefill?.name||''}">
+    </div>
+    <div class="form-row">
+      <div class="form-label">System Prompt</div>
+      <textarea id="sysSlotPrompt${idx}" rows="3" placeholder="You are a… Your role is to…">${prefill?.systemPrompt||''}</textarea>
+    </div>
+    <div style="margin-top:6px;display:flex;gap:8px;align-items:center;">
+      <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:5px;cursor:pointer;">
+        <input type="checkbox" id="sysSlotAware${idx}" ${prefill?.awareness?'checked':''} style="accent-color:${color};width:13px;height:13px;">
+        AI Awareness injection
+      </label>
+    </div>`;
+  container.appendChild(div);
+}
+
+async function saveSystem(){
+  const name=document.getElementById('sysName').value.trim();
+  if(!name) return alert('System name is required');
+  const slots=[];
+  for(let i=0;i<sysSlotCount;i++){
+    const el=document.getElementById(`sysSlotCfg${i}`);
+    if(!el) continue; // removed slot
+    const nameEl=document.getElementById(`sysSlotName${i}`);
+    const promptEl=document.getElementById(`sysSlotPrompt${i}`);
+    const awareEl=document.getElementById(`sysSlotAware${i}`);
+    slots.push({
+      slot: SLOT_LETTERS[slots.length]||'A',
+      name: nameEl?nameEl.value.trim():'',
+      systemPrompt: promptEl?promptEl.value:'',
+      awareness: awareEl?awareEl.checked:false,
+    });
+  }
+  if(slots.length<1) return alert('Add at least one slot');
+  const system={
+    id: editingSystemId||'',
+    name,
+    description: document.getElementById('sysDesc').value.trim(),
+    turns: parseInt(document.getElementById('sysTurns').value)||6,
+    slots,
+  };
+  try{
+    const r=await fetch(`${API}/api/systems/save`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(system)});
+    const d=await r.json();
+    system.id=d.id;
+    closeSystemEditor();
+    loadSystemsList();
+    addSys(`⬡ SYSTEM SAVED: "${name}"`);
+  }catch(e){ alert('Save failed'); }
+}
+
+async function deleteSystem(id){
+  if(!confirm('Delete this system?')) return;
+  await fetch(`${API}/api/systems/delete/${id}`,{method:'DELETE'});
+  loadSystemsList();
+}
+
+// Also expose "Save Current Config as System" shortcut
+async function saveCurrentAsSystem(){
+  const name=prompt('System name:');
+  if(!name||!name.trim()) return;
+  const slots=activeSlots.map(s=>({
+    slot:s,
+    name:getSlotName(s),
+    systemPrompt:getSys(s),
+    awareness:awarenessFlags[s],
+    params:getParams(s),
+  }));
+  const system={id:'',name:name.trim(),description:'',turns:parseInt(document.getElementById('turns').value)||4,slots};
+  try{
+    await fetch(`${API}/api/systems/save`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(system)});
+    loadSystemsList();
+    addSys(`⬡ SYSTEM SAVED: "${name}"`);
+  }catch(e){ alert('Save failed'); }
+}
+
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 function onKey(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendUser(); } }
 function resizeTA(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────────
+// Warn before page refresh if there's an unsaved active session
+window.addEventListener('beforeunload', e => {
+  if(chatDirty && chatLog.length){
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 init();
 loadChatList();
+loadSystemsList();
 </script>
 </body>
 </html>
