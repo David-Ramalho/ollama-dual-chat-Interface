@@ -1,11 +1,14 @@
 """
-Echo // Multi-Mind v1.7
+Echo // Multi-Mind v1.8
 - Keyword RAG + Ollama Embedding RAG
 - Knowledge Base persistence (saved to echo_knowledge/)
 - Chat & folder persistence (echo_chats/)
 - Custom Model Profiles (echo_profiles/profiles.json)
+- Multi-AI Systems Presets (echo_systems/systems.json)
 - Embedding: auto-truncates chunks that exceed model context window
 - KB load: filters empty-embedding chunks instead of blocking
+- v1.8: Chat duplication, Systems presets, Skip/Pause flow control,
+         Global stop fix, Context role-mapping fix, RAG log fix
 
 Install: pip install flask requests flask-cors
 Run:     python echo_server.py
@@ -30,10 +33,13 @@ OLLAMA_URL    = "http://localhost:11434"
 CHATS_DIR     = Path(__file__).parent / 'echo_chats'
 KNOWLEDGE_DIR = Path(__file__).parent / 'echo_knowledge'
 PROFILES_DIR  = Path(__file__).parent / 'echo_profiles'
+SYSTEMS_DIR   = Path(__file__).parent / 'echo_systems'
 MODELS_FILE   = PROFILES_DIR / 'profiles.json'
+SYSTEMS_FILE  = SYSTEMS_DIR  / 'systems.json'
 CHATS_DIR.mkdir(exist_ok=True)
 KNOWLEDGE_DIR.mkdir(exist_ok=True)
 PROFILES_DIR.mkdir(exist_ok=True)
+SYSTEMS_DIR.mkdir(exist_ok=True)
 
 # Migrate legacy echo_models.json → echo_profiles/profiles.json
 _legacy = Path(__file__).parent / 'echo_models.json'
@@ -136,6 +142,27 @@ def api_chats_move():
         new_path = target_dir / f.name
         f.rename(new_path)
         return jsonify({'ok': True})
+    return jsonify({'error': 'Not found'}), 404
+
+@app.route('/api/chats/duplicate/<path:chat_id>', methods=['POST'])
+def api_chats_duplicate(chat_id):
+    """Deep-copy a chat with a new ID, preserving all settings and log."""
+    for f in CHATS_DIR.rglob(f"{chat_id}.json"):
+        try:
+            data    = json.loads(f.read_text(encoding='utf-8'))
+            new_id  = datetime.datetime.now().strftime('%Y-%m-%dT%H-%M-%S') + '-copy'
+            old_title = data.get('title', chat_id)
+            data['id']    = new_id
+            data['title'] = f"{old_title} (copy)"
+            data['date']  = datetime.datetime.now().isoformat()
+            # Save in the same folder as the original
+            target_dir = f.parent
+            new_path   = target_dir / f"{new_id}.json"
+            new_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+            print(f"[CHAT] Duplicated '{chat_id}' → '{new_id}'")
+            return jsonify({'ok': True, 'new_id': new_id, 'title': data['title']})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
     return jsonify({'error': 'Not found'}), 404
 
 # ─── KNOWLEDGE BASE PERSISTENCE ──────────────────────────────────────────────
@@ -291,6 +318,45 @@ def api_profiles_save():
 def api_profiles_delete(profile_id):
     profiles = [p for p in load_model_profiles() if p['id'] != profile_id]
     save_model_profiles(profiles)
+    return jsonify({'ok': True})
+
+# ─── MULTI-AI SYSTEMS ──────────────────────────────────────────────────────────
+
+def load_systems():
+    if SYSTEMS_FILE.exists():
+        try:
+            return json.loads(SYSTEMS_FILE.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    return []
+
+def save_systems(systems):
+    SYSTEMS_FILE.write_text(json.dumps(systems, ensure_ascii=False, indent=2), encoding='utf-8')
+
+@app.route('/api/systems', methods=['GET'])
+def api_systems_list():
+    return jsonify({'systems': load_systems()})
+
+@app.route('/api/systems/save', methods=['POST'])
+def api_systems_save():
+    system = request.json or {}
+    if not system.get('id'):
+        system['id'] = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')
+    system['updated'] = datetime.datetime.now().isoformat()
+    systems = load_systems()
+    idx = next((i for i, s in enumerate(systems) if s['id'] == system['id']), None)
+    if idx is not None:
+        systems[idx] = system
+    else:
+        systems.append(system)
+    save_systems(systems)
+    print(f"[SYSTEMS] Saved: {system.get('name','?')} ({system['id']})")
+    return jsonify({'ok': True, 'id': system['id']})
+
+@app.route('/api/systems/delete/<system_id>', methods=['DELETE'])
+def api_systems_delete(system_id):
+    systems = [s for s in load_systems() if s['id'] != system_id]
+    save_systems(systems)
     return jsonify({'ok': True})
 
 # ─── RAG — KEYWORD MODE ──────────────────────────────────────────────────────
@@ -613,12 +679,13 @@ def serve_static(path):
 
 if __name__ == '__main__':
     print("═" * 58)
-    print("  ECHO // MULTI-MIND  v1.7")
+    print("  ECHO // MULTI-MIND  v1.8")
     print("═" * 58)
     print(f"  UI:        http://localhost:8080")
     print(f"  Ollama:    {OLLAMA_URL}")
     print(f"  Chats:     {CHATS_DIR}")
     print(f"  Knowledge: {KNOWLEDGE_DIR}")
     print(f"  Profiles:  {PROFILES_DIR}")
+    print(f"  Systems:   {SYSTEMS_DIR}")
     print("═" * 58)
     app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)
