@@ -3,12 +3,12 @@
 > *In 2023, I asked a local Llama model to think of a name for itself 
 > and come back to me in a future conversation with its answer.*
 >
-> *It returned with "Echo" — explaining that we echo each other's 
+> *It returned with "Echo" explaining that we echo each other's 
 > thoughts and consciousness. I didn't choose the name. It did.*
 >
 > *Everything in this repository grew from following that curiosity.*
 
-> This is a local, privacy-first interface for multi-model AI conversations — powered by Ollama and a lightweight Flask proxy with dual RAG engines (keyword + semantic embeddings), persistent knowledge bases, custom awareness injection, real-time token monitoring, Multi-AI System presets, and full flow control (skip, pause, inject, resume).
+> This is a local, privacy-first interface for multi-model AI conversations powered by Ollama and a lightweight Flask proxy with dual RAG engines (keyword + semantic embeddings), persistent knowledge bases, custom awareness injection, real-time token monitoring, Multi-AI System presets, and full flow control (skip, pause, inject, resume).
 
 ```
  ╔══════════════════════════════════════════════════╗
