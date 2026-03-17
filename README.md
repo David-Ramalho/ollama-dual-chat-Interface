@@ -1,6 +1,6 @@
 # ECHO // MULTI-MIND v0.85
 
-> *In 2023, I asked a local Llama model to think of a name for itself 
+> *In 2024, I asked a local Llama model to think of a name for itself 
 > and come back to me in a future conversation with its answer.*
 >
 > *It returned with "Echo" explaining that we echo each other's 
