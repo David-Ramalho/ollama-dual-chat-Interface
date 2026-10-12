@@ -31,7 +31,7 @@ Echo Multi-Mind is a self-hosted, multi-model chat environment. Instead of talki
 - **Save and reload every conversation** from a persistent sidebar with folder organisation.
 - **Save multi-agent configurations** as named Systems presets — load a full Trialogue, Debate, or any custom layout in one click.
 
-Everything runs locally. No API keys. No data sent anywhere except to your own Ollama instance.
+Everything is designed to run locally, without API keys, and the app sends model requests to your configured Ollama instance. **Network note:** the current Flask server binds to `0.0.0.0:8080` and enables CORS for all origins. Depending on your network and firewall, other devices may be able to reach it. Treat it as a trusted-network tool; do not expose it publicly without reviewing its bind address, CORS policy, and access controls.
 
 ---
 
@@ -229,20 +229,12 @@ The terminal will show:
 ## Project Structure
 
 ```
-echo-multi-mind/
+ollama-dual-chat-Interface/
+├── README.md             ← Setup, features, and technical reference
 ├── echo_server.py        ← Flask backend (proxy + RAG + persistence)
-├── echo_chats/           ← Auto-created; stores saved chats as JSON
-│   ├── 2026-03-01T...json
-│   └── my-folder/
-│       └── 2026-03-02T...json
-├── echo_knowledge/       ← Auto-created; stores saved knowledge bases as JSON
-│   └── my_notes.json
-├── echo_profiles/        ← Auto-created; stores custom model profiles
-│   └── profiles.json
-├── echo_systems/         ← Auto-created; stores multi-AI system presets
-│   └── systems.json
-└── echo_ui/
-    └── index.html        ← Complete frontend (HTML + CSS + JS, single file)
+└── index.html            ← Complete frontend (HTML + CSS + JS, single file)
+
+Runtime data folders (chats, knowledge bases, profiles, and systems) are created beside `echo_server.py` as the app is used.
 ```
 
 > **Upgrading from v0.80:** Drop in the new `echo_server.py` and `index.html`. No migrations needed — all existing chats, knowledge bases, profiles, and systems are fully compatible.
@@ -853,3 +845,4 @@ All files are stored next to `echo_server.py`: `echo_chats/` for conversations, 
 - [Ollama](https://ollama.com) — local model serving
 - [Flask](https://flask.palletsprojects.com) — Python web framework
 - [JetBrains Mono](https://www.jetbrains.com/legalnotice/fonts/) + [Inter](https://rsms.me/inter/) — fonts used in the UI
+
